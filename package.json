@@ -1,0 +1,21 @@
+{
+  "name": "tinder-for-volunteering",
+  "version": "1.0.0",
+  "main": "App.js",
+  "scripts": {
+    "start": "expo start"
+  },
+  "dependencies": {
+    "@react-navigation/bottom-tabs": "^7.4.2",
+    "@react-navigation/native": "^7.1.14",
+    "@react-navigation/stack": "^7.4.2",
+    "core-js": "^3.44.0",
+    "expo": "^53.0.20",
+    "expo-router": "^1.5.3",
+    "lodash": "^4.17.21",
+    "react": "^19.0.0",
+    "react-native": "^0.79.5",
+    "react-native-deck-swiper": "^1.1.7",
+    "react-native-paper": "^5.14.5"
+  }
+}
