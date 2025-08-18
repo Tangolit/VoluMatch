@@ -1,11 +1,17 @@
+// Main App component with role-based navigation and authentication
 import React from 'react';
-import { Provider as PaperProvider } from 'react-native-paper';
-import AppNavigator from './navigation/AppNavigator';
+import { NavigationContainer } from '@react-navigation/native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { StatusBar } from 'expo-status-bar';
+import RootNavigator from './navigation/RootNavigator';
 
 export default function App() {
   return (
-    <PaperProvider>
-      <AppNavigator />
-    </PaperProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer>
+        <StatusBar style="auto" />
+        <RootNavigator />
+      </NavigationContainer>
+    </GestureHandlerRootView>
   );
-} 
+}

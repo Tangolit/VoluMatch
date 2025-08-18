@@ -1,21 +1,34 @@
 {
   "name": "tinder-for-volunteering",
   "version": "1.0.0",
-  "main": "App.js",
+  "main": "index.js",
   "scripts": {
-    "start": "expo start"
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "dev": "expo start --clear"
   },
   "dependencies": {
-    "@react-navigation/bottom-tabs": "^7.4.2",
-    "@react-navigation/native": "^7.1.14",
-    "@react-navigation/stack": "^7.4.2",
-    "core-js": "^3.44.0",
-    "expo": "^53.0.20",
-    "expo-router": "^1.5.3",
-    "lodash": "^4.17.21",
-    "react": "^19.0.0",
-    "react-native": "^0.79.5",
-    "react-native-deck-swiper": "^1.1.7",
-    "react-native-paper": "^5.14.5"
-  }
+    "@expo/vector-icons": "^14.1.0",
+    "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-navigation/bottom-tabs": "^7.4.6",
+    "@react-navigation/native": "^7.1.17",
+    "@react-navigation/stack": "^7.4.7",
+    "expo": "~53.0.20",
+    "expo-linear-gradient": "~14.1.5",
+    "expo-location": "^18.1.6",
+    "expo-status-bar": "~2.2.3",
+    "firebase": "^12.1.0",
+    "react": "19.0.0",
+    "react-native": "0.79.5",
+    "react-native-deck-swiper": "^2.0.19",
+    "react-native-gesture-handler": "~2.24.0",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "~4.11.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0"
+  },
+  "private": true
 }

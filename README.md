@@ -1,50 +1,191 @@
-# Welcome to your Expo app 👋
+# Tinder for Volunteering - MVP App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native + Expo app that connects volunteers with local opportunities using a swipe-based interface.
 
-## Get started
+## Features
 
-1. Install dependencies
+### ✅ Implemented
+- **Authentication**: Firebase Auth integration (placeholder working)
+- **Swipeable Opportunities**: Browse volunteering opportunities with Tinder-like interface
+- **Profile Management**: Editable user profiles with skills and interests
+- **Impact Dashboard**: Track hours volunteered, opportunities, and achievement badges
+- **Location-Aware Filtering**: Shows opportunities within 25-mile radius
+- **Skill-Based Matching**: Prioritizes opportunities matching user skills
+- **Parental Consent**: Required for users under 18
 
+### 🔧 Technical Features
+- **Firestore Integration**: Real-time data with fallback to mock data
+- **Modular Architecture**: Clean folder structure and reusable components
+- **Responsive Design**: Works on both iOS and Android
+- **Error Handling**: Graceful fallbacks when services are unavailable
+
+## Project Structure
+
+```
+/
+├── components/          # Reusable UI components
+│   ├── OpportunityCard.js
+│   ├── SkillSelector.js
+│   └── BadgeIcon.js
+├── screens/            # App screens
+│   ├── AuthScreen.js
+│   ├── SwipeScreen.js
+│   ├── ProfileScreen.js
+│   └── ImpactScreen.js
+├── services/           # External service integrations
+│   ├── firebase.js
+│   └── firestore.js
+├── utils/              # Utility functions
+│   └── location.js
+├── data/               # Mock data and constants
+│   └── mockData.js
+└── App.js              # Main app component
+```
+
+## Setup Instructions
+
+### Prerequisites
+- Node.js 16+
+- Expo CLI
+- iOS Simulator or Android Emulator (or Expo Go app)
+
+### Installation
+
+1. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. Start the app
+2. **Firebase Setup (Optional)**
+   - Create a Firebase project at https://console.firebase.google.com
+   - Enable Authentication and Firestore
+   - Replace config in `services/firebase.js` with your Firebase config
+   - The app works with mock data if Firebase is not configured
 
+3. **Run the app**
    ```bash
-   npx expo start
+   npm start
+   # or
+   npm run dev  # starts with cache cleared
    ```
 
-In the output, you'll find options to open the app in a
+4. **Choose platform**
+   - Press `i` for iOS Simulator
+   - Press `a` for Android Emulator
+   - Press `w` for Web
+   - Scan QR code with Expo Go app
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Usage
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Getting Started
+1. **Sign up/Login**: Use any email/password (placeholder auth)
+2. **Complete Profile**: Add your skills and interests for better matching
+3. **Start Swiping**: Swipe right on opportunities you're interested in
+4. **Track Impact**: View your volunteering stats and earned badges
 
-## Get a fresh project
+### For Users Under 18
+- Must toggle "Parental Consent Obtained" in profile settings
+- Cannot swipe on opportunities without parental consent
 
-When you're ready, run:
+## Data Models
 
-```bash
-npm run reset-project
+### Opportunity
+```javascript
+{
+  id: string,
+  title: string,
+  organization: string,
+  description: string,
+  location: {
+    address: string,
+    latitude: number,
+    longitude: number
+  },
+  duration: number, // hours
+  requiredSkills: string[],
+  verified: boolean,
+  imageUrl: string,
+  contactEmail: string,
+  requirements: string[],
+  createdAt: Date
+}
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### User Profile
+```javascript
+{
+  id: string,
+  name: string,
+  email: string,
+  age: number,
+  bio: string,
+  skills: string[],
+  interests: string[],
+  parentalConsent: boolean, // for users under 18
+  hoursVolunteered: number,
+  opportunitiesCompleted: number
+}
+```
 
-## Learn more
+## Key Features Explained
 
-To learn more about developing your project with Expo, look at the following resources:
+### Location-Aware Filtering
+- Uses `expo-location` to get user's current position
+- Calculates distance using Haversine formula
+- Filters opportunities within 25-mile radius
+- Gracefully handles permission denials
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Skill-Based Matching
+- Calculates match scores based on user skills and interests
+- Prioritizes opportunities with higher match scores
+- Falls back to showing all opportunities if no matches
 
-## Join the community
+### Impact Tracking
+- Tracks hours volunteered and opportunities completed
+- Awards achievement badges for milestones
+- Shows progress toward next goals
 
-Join our community of developers creating universal apps.
+### Parental Consent
+- Required for users under 18
+- Prevents swiping until consent is obtained
+- Configurable in profile settings
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Development Notes
+
+### State Management
+- Uses React hooks for local state
+- Profile data stored locally (ready for Firestore integration)
+- User interests saved to Firestore when available
+
+### Error Handling
+- All Firestore operations have try-catch blocks
+- Graceful fallback to mock data
+- User-friendly error messages
+
+### Performance
+- Lazy loading of opportunities
+- Optimized image loading
+- Efficient filtering and sorting algorithms
+
+## Future Enhancements
+
+- Real-time messaging with organizations
+- Calendar integration for volunteer scheduling
+- Social features (invite friends, share achievements)
+- Advanced filtering (by date, organization type, etc.)
+- Push notifications for new opportunities
+- Volunteer history with completion tracking
+
+## Contributing
+
+This is a student project for the Congressional App Challenge. Focus on:
+- Code clarity and maintainability
+- Working examples over optimization
+- Comprehensive error handling
+- Good user experience
+
+## License
+
+Educational use only - Congressional App Challenge submission.
+
+
