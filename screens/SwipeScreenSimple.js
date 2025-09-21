@@ -32,33 +32,86 @@ const SwipeScreenSimple = ({ user, userProfile }) => {
   const [filteredOpportunities, setFilteredOpportunities] = useState([]);
 
   useEffect(() => {
+    // Load opportunities immediately with mock data for faster loading
+    setOpportunities(mockOpportunities);
+    setLoading(false);
+    
+    // Initialize other features in background
     initializeRecommendationEngine();
-    loadOpportunities();
     getUserLocation();
   }, []);
 
+  // TEMPORARILY DISABLED - May cause infinite loops
+  // useEffect(() => {
+  //   if (opportunities.length > 0) {
+  //     console.log('🔄 Computing filtered opportunities...');
+  //     const computedOpportunities = computeFilteredOpportunities();
+  //     setFilteredOpportunities(computedOpportunities);
+  //     
+  //     // Debug: Show what will be passed to Swiper
+  //     console.log('🎴 Final cards for Swiper (first 3):');
+  //     computedOpportunities.slice(0, 3).forEach((card, index) => {
+  //       console.log(`  Swiper[${index}]: "${card.id}" (${card.title})`);
+  //     });
+  //   } else {
+  //     setFilteredOpportunities([]);
+  //   }
+  // }, [opportunities, user?.uid]); // Recompute when opportunities or user changes
+  
   // Compute filtered opportunities whenever raw opportunities change
   useEffect(() => {
     if (opportunities.length > 0) {
       console.log('🔄 Computing filtered opportunities...');
-      const computedOpportunities = computeFilteredOpportunities();
-      setFilteredOpportunities(computedOpportunities);
       
-      // Debug: Show what will be passed to Swiper
-      console.log('🎴 Final cards for Swiper (first 3):');
-      computedOpportunities.slice(0, 3).forEach((card, index) => {
-        console.log(`  Swiper[${index}]: "${card.id}" (${card.title})`);
-      });
+      // Compute directly in useEffect to avoid dependency issues
+      let filtered = opportunities;
+      
+      // Use AI recommendation engine with improved consistency
+      if (user?.uid && filtered.length > 0) {
+        console.log('🤖 AI recommendation engine processing', filtered.length, 'opportunities');
+        
+        try {
+          if (!recommendationEngine || typeof recommendationEngine.getRecommendations !== 'function') {
+            console.log('⚠️ Recommendation engine not available, using original order');
+            setFilteredOpportunities(filtered);
+            return;
+          }
+          
+          const recommendations = recommendationEngine.getRecommendations(filtered, filtered.length);
+          const analytics = recommendationEngine.getAnalytics();
+          
+          console.log('📊 AI Analytics: Interactions:', analytics.totalInteractions, 
+                     'Swipe Rate:', (analytics.swipeRightRate * 100).toFixed(1) + '%');
+          
+          setFilteredOpportunities(recommendations);
+          return;
+          
+        } catch (error) {
+          console.error('🚨 AI Recommendation Error:', error.message);
+          console.log('🔄 Falling back to original order');
+          setFilteredOpportunities(filtered);
+          return;
+        }
+      }
+
+      // Fallback to original order if no user data or AI disabled
+      console.log('🔢 Using original order (no AI recommendations)');
+      setFilteredOpportunities(filtered);
+      
     } else {
       setFilteredOpportunities([]);
     }
-  }, [opportunities, user?.uid]); // Recompute when opportunities or user changes
+  }, [opportunities, user?.uid]); // Only depend on these specific values
 
   // Initialize recommendation engine with user data
   const initializeRecommendationEngine = async () => {
-    if (user?.uid) {
-      await recommendationEngine.initialize(user.uid);
-      recommendationEngine.setUserProfile(userProfile);
+    try {
+      if (user?.uid && typeof recommendationEngine?.initialize === 'function') {
+        await recommendationEngine.initialize(user.uid, userProfile);
+        console.log('✅ Recommendation engine initialized for user:', user.uid);
+      }
+    } catch (error) {
+      console.error('🚨 Failed to initialize recommendation engine:', error);
     }
   };
 
@@ -99,59 +152,6 @@ const SwipeScreenSimple = ({ user, userProfile }) => {
     }
   };
 
-  // Compute AI-powered recommendations with consistent indexing (called once per opportunities change)
-  const computeFilteredOpportunities = () => {
-    let filtered = opportunities;
-
-    // LOCATION FILTERING DISABLED FOR TESTING
-    console.log('📍 Location filtering DISABLED for testing - showing all 50 opportunities');
-
-    // Use AI recommendation engine with improved consistency
-    console.log('🔍 AI Check - User object:', user);
-    console.log('🔍 AI Check - user?.uid:', user?.uid);
-    console.log('🔍 AI Check - filtered.length:', filtered.length);
-    
-    if (user?.uid && filtered.length > 0) {
-      console.log('🤖 AI recommendation engine RE-ENABLED with consistency fixes');
-      
-      try {
-        const recommendations = recommendationEngine.getRecommendations(filtered, filtered.length);
-        
-        // Log recommendation analytics
-        const analytics = recommendationEngine.getAnalytics();
-        console.log('📊 Recommendation Analytics:', {
-          totalInteractions: analytics.totalInteractions,
-          swipeRightRate: (analytics.swipeRightRate * 100).toFixed(1) + '%',
-          topCategories: analytics.topCategories.slice(0, 3)
-        });
-        
-        // Debug: Log the reordered opportunities
-        console.log('🔄 AI Reordered - First 5 opportunities:');
-        recommendations.slice(0, 5).forEach((opp, index) => {
-          console.log(`  AI[${index}]: "${opp.id}" (${opp.title}) - Score: ${opp.matchScore?.toFixed(2) || 'N/A'}`);
-        });
-        
-        // Return AI-reordered array
-        return recommendations;
-        
-      } catch (error) {
-        console.error('🚨 AI Recommendation Error:', error);
-        console.log('🔄 Falling back to original order due to AI error');
-        return filtered;
-      }
-    }
-
-    // Fallback to original order if no user data or AI disabled
-    console.log('🔢 Using original order (no AI recommendations)');
-    if (filtered.length > 0) {
-      console.log('🔢 First 5 opportunities in original order:');
-      filtered.slice(0, 5).forEach((opp, index) => {
-        console.log(`  Orig[${index}]: "${opp.id}" (${opp.title})`);
-      });
-    }
-    
-    return filtered;
-  };
 
   // Handle right swipe (interested)
   const onSwipedRight = async (cardIndex) => {
@@ -163,15 +163,15 @@ const SwipeScreenSimple = ({ user, userProfile }) => {
     console.log('❤️ Swiped right on:', opportunity.title, 'ID:', opportunity.id);
     console.log('⏰ Swipe timestamp:', new Date().toISOString());
     
-    // Track interaction with AI engine
-    if (user?.uid) {
-      recommendationEngine.trackInteraction(
-        opportunity, 
-        'swipe_right', 
-        timeSpent,
-        1000 // Assume normal swipe velocity
-      );
-    }
+    // Track interaction with AI engine - TEMPORARILY DISABLED
+    // if (user?.uid) {
+    //   recommendationEngine.trackInteraction(
+    //     opportunity, 
+    //     'swipe_right', 
+    //     timeSpent,
+    //     1000 // Assume normal swipe velocity
+    //   );
+    // }
     
     try {
       // Save interest to local storage (and Firestore if available)
@@ -233,15 +233,15 @@ const SwipeScreenSimple = ({ user, userProfile }) => {
     console.log('🃏 LEFT Opportunity at this index:', { title: opportunity.title, id: opportunity.id });
     console.log('👈 Swiped left on:', opportunity.title);
     
-    // Track interaction with AI engine
-    if (user?.uid) {
-      recommendationEngine.trackInteraction(
-        opportunity, 
-        'swipe_left', 
-        timeSpent,
-        1500 // Assume faster swipe velocity for left swipes
-      );
-    }
+    // Track interaction with AI engine - TEMPORARILY DISABLED
+    // if (user?.uid) {
+    //   recommendationEngine.trackInteraction(
+    //     opportunity, 
+    //     'swipe_left', 
+    //     timeSpent,
+    //     1500 // Assume faster swipe velocity for left swipes
+    //   );
+    // }
     
     // Save left swipe to local storage (and Firestore for analytics)
     const userId = user?.uid || user?.id || 'mock-user';

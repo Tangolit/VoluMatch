@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 // Using mock Firestore for testing
@@ -100,84 +102,89 @@ const RoleSelectionScreen = ({ user, onRoleSelected }) => {
   ];
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Ionicons name="people" size={48} color="#3498db" />
-        <Text style={styles.headerTitle}>Welcome!</Text>
-        <Text style={styles.headerSubtitle}>
-          Choose your role to get started with volunteering
-        </Text>
-      </View>
+    <SafeAreaView style={styles.container}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Ionicons name="people" size={48} color="#3498db" />
+          <Text style={styles.headerTitle}>Welcome!</Text>
+          <Text style={styles.headerSubtitle}>
+            Choose your role to get started with volunteering
+          </Text>
+        </View>
 
-      {/* Role Cards */}
-      <View style={styles.rolesContainer}>
-        {roles.map((role) => (
-          <TouchableOpacity
-            key={role.id}
-            style={[
-              styles.roleCard,
-              selectedRole === role.id && styles.selectedRoleCard,
-              { borderColor: role.color }
-            ]}
-            onPress={() => handleRoleSelect(role.id)}
-            disabled={loading}
-          >
-            <View style={styles.roleHeader}>
-              <View style={[styles.roleIcon, { backgroundColor: role.color }]}>
-                <Ionicons name={role.icon} size={32} color="#fff" />
-              </View>
-              <View style={styles.roleInfo}>
-                <Text style={[styles.roleTitle, { color: role.color }]}>
-                  {role.title}
-                </Text>
-                <Text style={styles.roleDescription}>
-                  {role.description}
-                </Text>
-              </View>
-              {selectedRole === role.id && (
-                <Ionicons name="checkmark-circle" size={24} color={role.color} />
-              )}
-            </View>
-
-            <View style={styles.featuresContainer}>
-              {role.features.map((feature, index) => (
-                <View key={index} style={styles.featureItem}>
-                  <Ionicons name="checkmark" size={16} color={role.color} />
-                  <Text style={styles.featureText}>{feature}</Text>
+        {/* Role Cards */}
+        <View style={styles.rolesContainer}>
+          {roles.map((role) => (
+            <TouchableOpacity
+              key={role.id}
+              style={[
+                styles.roleCard,
+                selectedRole === role.id && styles.selectedRoleCard,
+                { borderColor: role.color }
+              ]}
+              onPress={() => handleRoleSelect(role.id)}
+              disabled={loading}
+            >
+              <View style={styles.roleHeader}>
+                <View style={[styles.roleIcon, { backgroundColor: role.color }]}>
+                  <Ionicons name={role.icon} size={32} color="#fff" />
                 </View>
-              ))}
-            </View>
+                <View style={styles.roleInfo}>
+                  <Text style={[styles.roleTitle, { color: role.color }]}>
+                    {role.title}
+                  </Text>
+                  <Text style={styles.roleDescription}>
+                    {role.description}
+                  </Text>
+                </View>
+                {selectedRole === role.id && (
+                  <Ionicons name="checkmark-circle" size={24} color={role.color} />
+                )}
+              </View>
+
+              <View style={styles.featuresContainer}>
+                {role.features.map((feature, index) => (
+                  <View key={index} style={styles.featureItem}>
+                    <Ionicons name="checkmark" size={16} color={role.color} />
+                    <Text style={styles.featureText}>{feature}</Text>
+                  </View>
+                ))}
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Continue Button */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              !selectedRole && styles.disabledButton,
+              loading && styles.disabledButton
+            ]}
+            onPress={handleContinue}
+            disabled={!selectedRole || loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Text style={styles.continueButtonText}>Continue</Text>
+                <Ionicons name="arrow-forward" size={20} color="#fff" />
+              </>
+            )}
           </TouchableOpacity>
-        ))}
-      </View>
 
-      {/* Continue Button */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[
-            styles.continueButton,
-            !selectedRole && styles.disabledButton,
-            loading && styles.disabledButton
-          ]}
-          onPress={handleContinue}
-          disabled={!selectedRole || loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Text style={styles.continueButtonText}>Continue</Text>
-              <Ionicons name="arrow-forward" size={20} color="#fff" />
-            </>
-          )}
-        </TouchableOpacity>
-
-        <Text style={styles.footerText}>
-          You can always change your role settings later in your profile
-        </Text>
-      </View>
-    </View>
+          <Text style={styles.footerText}>
+            You can always change your role settings later in your profile
+          </Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -185,15 +192,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  scrollContainer: {
+    flexGrow: 1,
     padding: 20,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 40,
+    marginTop: 20,
+    marginBottom: 30,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#2c3e50',
     marginTop: 16,
@@ -204,15 +215,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 24,
+    paddingHorizontal: 20,
   },
   rolesContainer: {
-    flex: 1,
-    gap: 20,
+    gap: 16,
+    marginBottom: 30,
   },
   roleCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 24,
+    padding: 20,
     borderWidth: 2,
     borderColor: '#e1e8ed',
     shadowColor: '#000',
@@ -235,9 +247,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   roleIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
@@ -246,17 +258,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   roleTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 4,
   },
   roleDescription: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#7f8c8d',
-    lineHeight: 22,
+    lineHeight: 20,
   },
   featuresContainer: {
-    gap: 8,
+    gap: 6,
   },
   featureItem: {
     flexDirection: 'row',
@@ -270,16 +282,16 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: 20,
-    marginBottom: 20,
   },
   continueButton: {
     backgroundColor: '#3498db',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 18,
+    padding: 16,
     borderRadius: 12,
     gap: 8,
+    marginBottom: 16,
   },
   disabledButton: {
     backgroundColor: '#bdc3c7',
@@ -293,8 +305,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#95a5a6',
     textAlign: 'center',
-    marginTop: 16,
     lineHeight: 20,
+    paddingHorizontal: 20,
   },
 });
 

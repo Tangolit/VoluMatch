@@ -1,5 +1,5 @@
 // Screen to display all opportunities the user has swiped right on
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,13 @@ import { auth } from '../services/firebase';
 import { fetchUserSwipedOpportunities } from '../services/firestore';
 import OpportunityListItem from '../components/OpportunityListItem';
 import { mockOpportunities } from '../data/mockData';
-import { getUserSwipedOpportunitiesLocally, clearSwipesLocally, getSwipeStatsLocally } from '../services/localSwipeStorage';
+import { getUserSwipedOpportunitiesLocally, clearSwipesLocally, getSwipeStatsLocally, removeSwipeLocally } from '../services/localSwipeStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// Temporarily using mock service for development
+import { 
+  fetchUserCommunities, 
+  shareOpportunityToCommunity 
+} from '../services/mockFirestore';
 
 const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
   console.log('📋 MyOpportunitiesScreen mounted');
@@ -29,6 +34,8 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(0);
+  const [userCommunities, setUserCommunities] = useState([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   // Get swiped opportunities from local storage
   const getSwipedOpportunities = async (userId) => {
@@ -50,10 +57,17 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
     }
   };
 
-  // Load opportunities on component mount (without auto-clearing)
+  // TEMPORARILY DISABLED - May cause infinite loops
+  // useEffect(() => {
+  //   loadMyOpportunities();
+  // }, []);
+  
+  // Load opportunities on component mount
   useEffect(() => {
-    loadMyOpportunities();
-  }, []);
+    if (user?.uid) {
+      loadMyOpportunities();
+    }
+  }, [user?.uid, loadMyOpportunities]); // Depend on user and the memoized function
 
   const clearAllSwipesForTesting = async () => {
     try {
@@ -89,18 +103,19 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
     }
   };
 
+
+
   // Reload data when screen comes into focus (to pick up new swipes)
-  useFocusEffect(
-    React.useCallback(() => {
-      if (!loading && !refreshing) {
-        console.log('📱 Screen focused - reloading opportunities');
-        loadMyOpportunities();
-      }
-    }, [loading, refreshing])
-  );
+  // TEMPORARILY DISABLED - Causing infinite loops
+  // useFocusEffect(
+  //   React.useCallback(() => {
+  //     console.log('📱 Screen focused - reloading opportunities', new Date().toISOString());
+  //     loadMyOpportunities();
+  //   }, []) // Empty dependency array to prevent infinite loops
+  // );
 
   // Check if swipes have been updated since last load
-  const checkForUpdates = async () => {
+  const checkForUpdates = useCallback(async () => {
     try {
       // Don't check if already loading to prevent race conditions
       if (loading || refreshing) {
@@ -119,7 +134,7 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
     } catch (error) {
       console.error('Error checking for updates:', error);
     }
-  };
+  }, [loading, refreshing, lastUpdated, loadMyOpportunities]); // Dependencies for useCallback
 
   // Poll for updates every 5 seconds when screen is focused (less aggressive)
   // POLLING DISABLED FOR TESTING - Use manual refresh or focus events only
@@ -132,9 +147,15 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
   //   return () => clearInterval(interval);
   // }, [lastUpdated, loading, refreshing]);
 
-  const loadMyOpportunities = async () => {
+  const loadMyOpportunities = useCallback(async () => {
+    if (isLoadingData) {
+      console.log('📋 Already loading, skipping duplicate call');
+      return;
+    }
+    
     try {
-      console.log('📋 ===== LOADING MY OPPORTUNITIES =====');
+      setIsLoadingData(true);
+      console.log('📋 ===== LOADING MY OPPORTUNITIES =====', new Date().toISOString());
       setError(null);
       
       if (!user) {
@@ -168,6 +189,17 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
       
       console.log('📋 Loaded', userOpportunities.length, 'opportunities');
       
+      // Also load user communities for sharing
+      if (user?.uid) {
+        try {
+          const communities = await fetchUserCommunities(user.uid);
+          setUserCommunities(communities);
+          console.log('📋 Loaded', communities.length, 'user communities for sharing');
+        } catch (error) {
+          console.error('📋 Error loading user communities:', error);
+        }
+      }
+      
       // Debug: Log the actual opportunities loaded
       if (userOpportunities.length > 0) {
         console.log('📋 Loaded opportunities:', userOpportunities.map(o => `"${o.id}" (${o.title})`));
@@ -184,8 +216,9 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setIsLoadingData(false);
     }
-  };
+  }, [user, userProfile, isLoadingData]); // Dependencies for useCallback
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -219,9 +252,35 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
         { 
           text: 'Remove', 
           style: 'destructive',
-          onPress: () => {
-            // TODO: Implement remove functionality
-            Alert.alert('Feature coming soon!', 'Remove functionality will be available in the next update.');
+          onPress: async () => {
+            try {
+              console.log('🗑️ Removing opportunity:', opportunity.title, 'ID:', opportunity.id);
+              
+              // Remove from local storage
+              await removeSwipeLocally(user.uid, opportunity.id);
+              
+              // Update the UI by removing from state
+              setOpportunities(prevOpportunities => 
+                prevOpportunities.filter(opp => opp.id !== opportunity.id)
+              );
+              
+              // Show success message
+              Alert.alert(
+                'Removed', 
+                `"${opportunity.title}" has been removed from your interested opportunities.`,
+                [{ text: 'OK' }]
+              );
+              
+              console.log('✅ Opportunity removed successfully');
+              
+            } catch (error) {
+              console.error('Error removing opportunity:', error);
+              Alert.alert(
+                'Error', 
+                'Failed to remove opportunity. Please try again.',
+                [{ text: 'OK' }]
+              );
+            }
           }
         }
       ]
@@ -259,15 +318,6 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
         <Text style={styles.retryButtonText}>Try Again</Text>
       </TouchableOpacity>
     </View>
-  );
-
-  const renderOpportunityItem = ({ item }) => (
-    <OpportunityListItem
-      opportunity={item}
-      swipeTimestamp={item.swipeTimestamp}
-      onPress={handleOpportunityPress}
-      onRemove={handleRemoveOpportunity}
-    />
   );
 
   const handleDebugStorage = async () => {
@@ -325,9 +375,70 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
     );
   }
 
+  // Handle sharing opportunity to community
+  const handleShareOpportunity = async (opportunity) => {
+    if (!userCommunities || userCommunities.length === 0) {
+      Alert.alert('No Communities', 'You need to join at least one community to share opportunities.');
+      return;
+    }
+
+    const communityOptions = userCommunities.map(community => ({
+      text: community.name,
+      onPress: () => confirmShareToCommunity(opportunity, community)
+    }));
+
+    Alert.alert(
+      'Share Opportunity',
+      `Share "${opportunity.title}" to which community?`,
+      [
+        ...communityOptions,
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const confirmShareToCommunity = (opportunity, community) => {
+    Alert.alert(
+      'Confirm Share',
+      `Share "${opportunity.title}" to "${community.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Share', 
+          onPress: () => performShare(opportunity, community) 
+        }
+      ]
+    );
+  };
+
+  const performShare = async (opportunity, community) => {
+    try {
+      const userId = user?.uid || user?.id || 'mock-user';
+      await shareOpportunityToCommunity(opportunity, community.id, userId);
+      
+      Alert.alert(
+        'Success', 
+        `"${opportunity.title}" has been shared to "${community.name}". Community members can now discover this opportunity!`
+      );
+    } catch (error) {
+      console.error('Error sharing opportunity:', error);
+      Alert.alert('Error', 'Failed to share opportunity. Please try again.');
+    }
+  };
+
   if (error && opportunities.length === 0) {
     return renderErrorState();
   }
+
+  const renderOpportunityItem = ({ item }) => (
+    <OpportunityListItem
+      opportunity={item}
+      swipeTimestamp={item.swipeTimestamp}
+      onPress={handleOpportunityPress}
+      onRemove={handleRemoveOpportunity}
+      onShare={handleShareOpportunity}
+    />
+  );
 
   return (
     <View style={styles.container}>

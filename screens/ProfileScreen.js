@@ -1,5 +1,5 @@
 // User profile screen with editable fields and volunteer history
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,12 +18,7 @@ const ProfileScreen = ({ user, userProfile, onProfileUpdate, onLogout }) => {
   const [editing, setEditing] = useState(false);
   const [volunteerHistory, setVolunteerHistory] = useState([]);
 
-  useEffect(() => {
-    // Load volunteer history from userInterests collection
-    loadVolunteerHistory();
-  }, []);
-
-  const loadVolunteerHistory = async () => {
+  const loadVolunteerHistory = useCallback(async () => {
     // TODO: Implement when Firestore is fully integrated
     // For now, use mock data
     setVolunteerHistory([
@@ -35,7 +30,13 @@ const ProfileScreen = ({ user, userProfile, onProfileUpdate, onLogout }) => {
         status: 'interested'
       }
     ]);
-  };
+  }, []); // No dependencies needed for this mock function
+
+  useEffect(() => {
+    // Load volunteer history from userInterests collection
+    loadVolunteerHistory();
+  }, [loadVolunteerHistory]);
+
 
   const handleSave = () => {
     // Validate required fields

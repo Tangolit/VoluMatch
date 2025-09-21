@@ -1,5 +1,5 @@
 // Screen for organizations to add new volunteer opportunities
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
 // Using native React Native components instead of react-native-paper
 import { Ionicons } from '@expo/vector-icons';
 // Using mock Firestore for testing
-import { createOpportunity, getMockDataStats } from '../services/mockFirestore';
+import { createOpportunity, getMockDataStats, fetchOrganizationCommunities } from '../services/mockFirestore';
 
 // Predefined skill options
 const AVAILABLE_SKILLS = [
@@ -62,6 +62,31 @@ const AddOpportunityScreen = ({ user }) => {
   const [selectedSkills, setSelectedSkills] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  
+  // Visibility options
+  const [isPublic, setIsPublic] = useState(true);
+  const [selectedCommunities, setSelectedCommunities] = useState([]);
+  const [organizationCommunities, setOrganizationCommunities] = useState([]);
+  const [loadingCommunities, setLoadingCommunities] = useState(false);
+
+  useEffect(() => {
+    loadOrganizationCommunities();
+  }, [user]);
+
+  const loadOrganizationCommunities = async () => {
+    if (!user?.uid) return;
+    
+    try {
+      setLoadingCommunities(true);
+      const communities = await fetchOrganizationCommunities(user.uid);
+      setOrganizationCommunities(communities);
+    } catch (error) {
+      console.error('Error loading organization communities:', error);
+      Alert.alert('Error', 'Failed to load your communities.');
+    } finally {
+      setLoadingCommunities(false);
+    }
+  };
 
   const updateFormData = (field, value) => {
     setFormData(prev => ({
@@ -88,6 +113,16 @@ const AddOpportunityScreen = ({ user }) => {
     });
   };
 
+  const toggleCommunity = (communityId) => {
+    setSelectedCommunities(prev => {
+      if (prev.includes(communityId)) {
+        return prev.filter(id => id !== communityId);
+      } else {
+        return [...prev, communityId];
+      }
+    });
+  };
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -107,6 +142,11 @@ const AddOpportunityScreen = ({ user }) => {
       newErrors.duration = 'Duration is required';
     } else if (isNaN(formData.duration) || parseFloat(formData.duration) <= 0) {
       newErrors.duration = 'Duration must be a positive number';
+    }
+
+    // Visibility validation
+    if (!isPublic && selectedCommunities.length === 0) {
+      newErrors.visibility = 'Please select at least one option: make it public or share with communities';
     }
 
     setErrors(newErrors);
@@ -143,6 +183,9 @@ const AddOpportunityScreen = ({ user }) => {
         tags: formData.tags.trim() ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
         verified: false, // Will be set by admin
         active: true,
+        // Visibility options
+        isPublic: isPublic,
+        sharedWithCommunities: selectedCommunities,
       };
 
       console.log('📊 Prepared opportunity data:', opportunityData);
@@ -152,9 +195,20 @@ const AddOpportunityScreen = ({ user }) => {
       const opportunityId = await createOpportunity(user.uid, opportunityData);
       console.log('🎉 Opportunity created successfully with ID:', opportunityId);
 
+      // Create success message based on what was actually done
+      let successMessage = 'Your opportunity has been created successfully!';
+      
+      if (isPublic && selectedCommunities.length > 0) {
+        successMessage = `Your opportunity has been published publicly and shared with ${selectedCommunities.length} communit${selectedCommunities.length === 1 ? 'y' : 'ies'}!`;
+      } else if (isPublic) {
+        successMessage = 'Your opportunity has been published publicly and is now available to all volunteers!';
+      } else if (selectedCommunities.length > 0) {
+        successMessage = `Your opportunity has been shared with ${selectedCommunities.length} communit${selectedCommunities.length === 1 ? 'y' : 'ies'} as posts!`;
+      }
+
       Alert.alert(
         'Success!',
-        'Your opportunity has been created and submitted for review.',
+        successMessage,
         [
           {
             text: 'Create Another',
@@ -192,6 +246,8 @@ const AddOpportunityScreen = ({ user }) => {
       tags: '',
     });
     setSelectedSkills([]);
+    setIsPublic(true);
+    setSelectedCommunities([]);
     setErrors({});
   };
 
@@ -319,6 +375,70 @@ const AddOpportunityScreen = ({ user }) => {
               placeholder="e.g., environment, community, weekend"
               style={styles.input}
             />
+          </View>
+
+          {/* Visibility Options */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Who can see this opportunity? *</Text>
+            <Text style={styles.sublabel}>Choose where to share this volunteer opportunity</Text>
+            
+            {/* Public Option */}
+            <TouchableOpacity
+              style={styles.checkboxContainer}
+              onPress={() => setIsPublic(!isPublic)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, isPublic && styles.checkboxChecked]}>
+                {isPublic && <Ionicons name="checkmark" size={16} color="#fff" />}
+              </View>
+              <View style={styles.checkboxContent}>
+                <Text style={styles.checkboxLabel}>Public to everyone</Text>
+                <Text style={styles.checkboxDescription}>
+                  All volunteers can discover this opportunity
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Communities Section */}
+            {organizationCommunities.length > 0 && (
+              <View style={styles.communitiesSection}>
+                <Text style={styles.communitiesTitle}>Share with your communities:</Text>
+                {loadingCommunities ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color="#e74c3c" />
+                    <Text style={styles.loadingText}>Loading communities...</Text>
+                  </View>
+                ) : (
+                  <View style={styles.communitiesContainer}>
+                    {organizationCommunities.map((community) => (
+                      <TouchableOpacity
+                        key={community.id}
+                        style={styles.checkboxContainer}
+                        onPress={() => toggleCommunity(community.id)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[
+                          styles.checkbox, 
+                          selectedCommunities.includes(community.id) && styles.checkboxChecked
+                        ]}>
+                          {selectedCommunities.includes(community.id) && (
+                            <Ionicons name="checkmark" size={16} color="#fff" />
+                          )}
+                        </View>
+                        <View style={styles.checkboxContent}>
+                          <Text style={styles.checkboxLabel}>{community.name}</Text>
+                          <Text style={styles.checkboxDescription}>
+                            {community.memberCount || 0} members
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {errors.visibility && <Text style={styles.errorText}>{errors.visibility}</Text>}
           </View>
 
           {/* Submit Button */}
@@ -479,6 +599,73 @@ const styles = StyleSheet.create({
     color: '#7f8c8d',
     fontSize: 16,
     fontWeight: '500',
+  },
+  // Visibility options styles
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e1e8ed',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#bdc3c7',
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: '#e74c3c',
+    borderColor: '#e74c3c',
+  },
+  checkboxContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  checkboxLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginBottom: 2,
+  },
+  checkboxDescription: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    lineHeight: 18,
+  },
+  communitiesSection: {
+    marginTop: 16,
+  },
+  communitiesTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginBottom: 8,
+  },
+  communitiesContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 8,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#7f8c8d',
   },
 });
 

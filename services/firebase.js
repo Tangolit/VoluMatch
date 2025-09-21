@@ -5,13 +5,14 @@ import { getFirestore } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Firebase config - replace with your actual config
+// For development, using placeholder config to avoid connection errors
 const firebaseConfig = {
-  apiKey: "your-api-key",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
+  apiKey: "demo-api-key",
+  authDomain: "demo-project.firebaseapp.com",
+  projectId: "demo-project-id",
+  storageBucket: "demo-project.appspot.com",
   messagingSenderId: "123456789",
-  appId: "your-app-id"
+  appId: "demo-app-id"
 };
 
 // Initialize Firebase

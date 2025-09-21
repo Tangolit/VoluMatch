@@ -16,7 +16,8 @@ const OpportunityListItem = ({
   opportunity, 
   swipeTimestamp, 
   onPress, 
-  onRemove 
+  onRemove,
+  onShare
 }) => {
   if (!opportunity) return null;
 
@@ -48,16 +49,30 @@ const OpportunityListItem = ({
             </Text>
           </View>
           
-          {/* Remove button */}
-          {onRemove && (
-            <TouchableOpacity 
-              style={styles.removeButton}
-              onPress={() => onRemove(opportunity)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="heart" size={20} color="#e74c3c" />
-            </TouchableOpacity>
-          )}
+          {/* Action buttons */}
+          <View style={styles.actionButtons}>
+            {/* Share button */}
+            {onShare && (
+              <TouchableOpacity 
+                style={styles.shareButton}
+                onPress={() => onShare(opportunity)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="share-outline" size={20} color="#3498db" />
+              </TouchableOpacity>
+            )}
+            
+            {/* Remove button */}
+            {onRemove && (
+              <TouchableOpacity 
+                style={styles.removeButton}
+                onPress={() => onRemove(opportunity)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="heart" size={20} color="#e74c3c" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Details row */}
@@ -169,6 +184,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#7f8c8d',
     fontWeight: '500',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shareButton: {
+    padding: 4,
   },
   removeButton: {
     padding: 4,

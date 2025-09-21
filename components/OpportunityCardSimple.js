@@ -1,4 +1,4 @@
-// Simple card component for displaying volunteering opportunities
+// Professional opportunity card component with all info displayed
 import React from 'react';
 import {
   View,
@@ -6,27 +6,40 @@ import {
   StyleSheet,
   Dimensions,
   Image,
-  ScrollView
+  TouchableOpacity
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get('window');
-const CARD_HEIGHT = height * 0.7; // Increased height for better scrolling
+const CARD_HEIGHT = height * 0.75;
 
 const OpportunityCardSimple = ({ opportunity }) => {
   if (!opportunity) return null;
   
   // Debug: Log what this card is displaying (reduced noise)
-  React.useEffect(() => {
-    console.log('🃏 Card mounted:', { title: opportunity.title, id: opportunity.id });
-  }, [opportunity.id]);
+  // TEMPORARILY DISABLED - May cause performance issues
+  // React.useEffect(() => {
+  //   console.log('🃏 Card mounted:', { title: opportunity.title, id: opportunity.id });
+  // }, [opportunity.id]);
 
   const formatSkills = (skills) => {
-    if (!skills || skills.length === 0) return 'No specific skills required';
+    if (!skills || skills.length === 0) return [];
     return skills.map(skill => 
       skill.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
-    ).join(', ');
+    );
   };
+
+  const formatDate = (date) => {
+    if (!date) return 'Date TBD';
+    return new Date(date).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const skills = formatSkills(opportunity.requiredSkills);
+  const maxSkills = 3;
 
   return (
     <View style={styles.card}>
@@ -37,67 +50,111 @@ const OpportunityCardSimple = ({ opportunity }) => {
           style={styles.image}
           resizeMode="cover"
         />
-        <View style={styles.overlay}>
+        <View style={styles.imageOverlay}>
           <View style={styles.durationBadge}>
-            <Ionicons name="time-outline" size={16} color="#fff" />
+            <Ionicons name="time-outline" size={14} color="#fff" />
             <Text style={styles.durationText}>{opportunity.duration}h</Text>
           </View>
+          {opportunity.verified && (
+            <View style={styles.verifiedBadge}>
+              <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
+            </View>
+          )}
         </View>
       </View>
 
       {/* Content Section */}
-      <ScrollView 
-        style={styles.content} 
-        showsVerticalScrollIndicator={true}
-        bounces={true}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Text style={styles.title}>{opportunity.title}</Text>
-        <Text style={styles.organization}>{opportunity.organization}</Text>
-        
+      <View style={styles.content}>
+        {/* Title and Organization */}
+        <View style={styles.header}>
+          <Text style={styles.title} numberOfLines={2}>
+            {opportunity.title || 'Volunteer Opportunity'}
+          </Text>
+          <Text style={styles.organization} numberOfLines={1}>
+            {opportunity.organization || 'Organization'}
+          </Text>
+        </View>
+
+        {/* Location */}
         <View style={styles.locationContainer}>
-          <Ionicons name="location-outline" size={16} color="#7f8c8d" />
-          <Text style={styles.location}>{opportunity.location?.address}</Text>
+          <Ionicons name="location-outline" size={14} color="#7f8c8d" />
+          <Text style={styles.locationText} numberOfLines={1}>
+            {opportunity.location?.address || 'Location TBD'}
+          </Text>
         </View>
 
-        <Text style={styles.description}>{opportunity.description}</Text>
-
-        {/* Skills Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Skills Needed</Text>
-          <Text style={styles.skills}>{formatSkills(opportunity.requiredSkills)}</Text>
+        {/* Event Details */}
+        <View style={styles.eventDetails}>
+          <View style={styles.detailItem}>
+            <Ionicons name="calendar-outline" size={14} color="#7f8c8d" />
+            <Text style={styles.detailText}>
+              {formatDate(opportunity.opportunityDate)}
+            </Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Ionicons name="time-outline" size={14} color="#7f8c8d" />
+            <Text style={styles.detailText}>
+              {opportunity.opportunityLength || `${opportunity.duration} hours`}
+            </Text>
+          </View>
         </View>
 
-        {/* Requirements Section */}
+        {/* Description */}
+        <Text style={styles.description} numberOfLines={3}>
+          {opportunity.description || 'No description available'}
+        </Text>
+
+        {/* Skills Tags */}
+        {skills.length > 0 && (
+          <View style={styles.skillsContainer}>
+            <Text style={styles.sectionLabel}>Skills:</Text>
+            <View style={styles.skillsTags}>
+              {skills.slice(0, maxSkills).map((skill, index) => (
+                <View key={index} style={styles.skillTag}>
+                  <Text style={styles.skillTagText}>{skill}</Text>
+                </View>
+              ))}
+              {skills.length > maxSkills && (
+                <View style={styles.skillTag}>
+                  <Text style={styles.skillTagText}>+{skills.length - maxSkills}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Requirements */}
         {opportunity.requirements && opportunity.requirements.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Requirements</Text>
-            {opportunity.requirements.map((req, index) => (
-              <View key={index} style={styles.requirementItem}>
-                <Ionicons name="checkmark-circle-outline" size={16} color="#27ae60" />
-                <Text style={styles.requirement}>{req}</Text>
-              </View>
-            ))}
+          <View style={styles.requirementsContainer}>
+            <Text style={styles.sectionLabel}>Requirements:</Text>
+            <View style={styles.requirementsList}>
+              {opportunity.requirements.slice(0, 2).map((req, index) => (
+                <View key={index} style={styles.requirementItem}>
+                  <Ionicons name="checkmark-circle" size={12} color="#27ae60" />
+                  <Text style={styles.requirementText} numberOfLines={1}>
+                    {req}
+                  </Text>
+                </View>
+              ))}
+              {opportunity.requirements.length > 2 && (
+                <Text style={styles.moreText}>
+                  +{opportunity.requirements.length - 2} more
+                </Text>
+              )}
+            </View>
           </View>
         )}
 
-        {/* Contact Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Contact</Text>
+        {/* Contact Info */}
+        <View style={styles.contactContainer}>
           <View style={styles.contactItem}>
-            <Ionicons name="mail-outline" size={16} color="#7f8c8d" />
-            <Text style={styles.contact}>{opportunity.contactEmail}</Text>
+            <Ionicons name="mail-outline" size={14} color="#3498db" />
+            <Text style={styles.contactText} numberOfLines={1}>
+              {opportunity.contactEmail || 'Contact via app'}
+            </Text>
           </View>
         </View>
-
-        {/* Match indicator if it exists */}
-        {opportunity.matchScore > 0 && (
-          <View style={styles.matchIndicator}>
-            <Ionicons name="star" size={16} color="#f1c40f" />
-            <Text style={styles.matchText}>Great match for you!</Text>
-          </View>
-        )}
-      </ScrollView>
+      </View>
     </View>
   );
 };
@@ -106,7 +163,7 @@ const styles = StyleSheet.create({
   card: {
     height: CARD_HEIGHT,
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -119,28 +176,29 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
   },
   imageContainer: {
-    height: CARD_HEIGHT * 0.35, // Reduced image height to give more space for content
+    height: CARD_HEIGHT * 0.4,
     position: 'relative',
   },
   image: {
     width: '100%',
     height: '100%',
   },
-  overlay: {
+  imageOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.1)',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'flex-end',
     padding: 12,
+    flexDirection: 'row',
   },
   durationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(52, 73, 94, 0.8)',
+    backgroundColor: 'rgba(52, 73, 94, 0.9)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -151,93 +209,123 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  verifiedBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+    padding: 4,
+  },
   content: {
     flex: 1,
     padding: 16,
   },
-  scrollContent: {
-    paddingBottom: 20, // Extra padding at bottom for better scrolling
+  header: {
+    marginBottom: 8,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#2c3e50',
     marginBottom: 4,
+    lineHeight: 24,
   },
   organization: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#3498db',
     fontWeight: '600',
-    marginBottom: 8,
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
     gap: 4,
   },
-  location: {
-    fontSize: 14,
+  locationText: {
+    fontSize: 13,
     color: '#7f8c8d',
     flex: 1,
+  },
+  eventDetails: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 12,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailText: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    fontWeight: '500',
   },
   description: {
     fontSize: 14,
     color: '#34495e',
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: 18,
+    marginBottom: 12,
   },
-  section: {
-    marginBottom: 16,
+  skillsContainer: {
+    marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 16,
+  sectionLabel: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#2c3e50',
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  skills: {
-    fontSize: 14,
-    color: '#34495e',
-    backgroundColor: '#ecf0f1',
-    padding: 8,
-    borderRadius: 6,
+  skillsTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  skillTag: {
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  skillTagText: {
+    fontSize: 11,
+    color: '#1976d2',
+    fontWeight: '500',
+  },
+  requirementsContainer: {
+    marginBottom: 12,
+  },
+  requirementsList: {
+    gap: 4,
   },
   requirementItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
     gap: 6,
   },
-  requirement: {
-    fontSize: 14,
+  requirementText: {
+    fontSize: 12,
     color: '#34495e',
     flex: 1,
+  },
+  moreText: {
+    fontSize: 11,
+    color: '#7f8c8d',
+    fontStyle: 'italic',
+  },
+  contactContainer: {
+    marginTop: 'auto',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#ecf0f1',
   },
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  contact: {
-    fontSize: 14,
-    color: '#34495e',
-  },
-  matchIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f39c12',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 8,
-    gap: 6,
-  },
-  matchText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '600',
+  contactText: {
+    fontSize: 12,
+    color: '#3498db',
+    flex: 1,
   },
 });
 

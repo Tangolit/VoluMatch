@@ -16,10 +16,43 @@ class RecommendationEngine {
   /**
    * Initialize the recommendation engine with user data
    */
-  async initialize(userId) {
+  async initialize(userId, userProfile = null) {
+    console.log('🔍 RecommendationEngine.initialize called with:', { userId, userProfile });
+    
     this.userId = userId;
+    this.userProfile = userProfile || {};
+    
+    // Ensure userPreferences has the correct structure
+    if (!this.userPreferences) {
+      this.userPreferences = {
+        categories: {},
+        skills: {},
+        organizations: {},
+        durations: {},
+        timeSlots: {},
+        locations: {}
+      };
+    }
+    
+    // Ensure userInteractions is initialized
+    if (!this.userInteractions) {
+      this.userInteractions = [];
+    }
+    
+    // Ensure sessionData is initialized
+    if (!this.sessionData) {
+      this.sessionData = {
+        timeSpent: {},
+        swipeVelocity: [],
+        sessionStartTime: Date.now(),
+        opportunitiesViewed: 0
+      };
+    }
+    
     await this.loadUserData();
     this.trackSessionStart();
+    
+    console.log('✅ RecommendationEngine initialization completed');
   }
 
   /**
@@ -217,150 +250,261 @@ class RecommendationEngine {
   calculateRecommendationScore(opportunity) {
     let score = 0;
     
-    // Base score from traditional matching
-    const baseScore = this.calculateBaseScore(opportunity);
-    score += baseScore * 0.3;
+    try {
+      // Base score from traditional matching
+      const baseScore = this.calculateBaseScore(opportunity);
+      score += baseScore * 0.3;
 
-    // Collaborative filtering score
-    const collaborativeScore = this.calculateCollaborativeScore(opportunity);
-    score += collaborativeScore * 0.2;
+      // Collaborative filtering score
+      const collaborativeScore = this.calculateCollaborativeScore(opportunity);
+      score += collaborativeScore * 0.2;
 
-    // Content-based score
-    const contentScore = this.calculateContentScore(opportunity);
-    score += contentScore * 0.3;
+      // Content-based score
+      const contentScore = this.calculateContentScore(opportunity);
+      score += contentScore * 0.3;
 
-    // Behavioral score
-    const behavioralScore = this.calculateBehavioralScore(opportunity);
-    score += behavioralScore * 0.15;
+      // Behavioral score
+      const behavioralScore = this.calculateBehavioralScore(opportunity);
+      score += behavioralScore * 0.15;
 
-    // Exploration bonus (prevent filter bubbles)
-    const explorationBonus = this.calculateExplorationBonus(opportunity);
-    score += explorationBonus * 0.05;
+      // Exploration bonus (prevent filter bubbles)
+      const explorationBonus = this.calculateExplorationBonus(opportunity);
+      score += explorationBonus * 0.05;
 
-    return Math.max(0, Math.min(1, score)); // Normalize to 0-1
+      const finalScore = Math.max(0, Math.min(1, score)); // Normalize to 0-1
+      return finalScore;
+    } catch (error) {
+      console.error('🚨 Error in calculateRecommendationScore for', opportunity?.title, ':', error);
+      throw error;
+    }
   }
 
   /**
    * Traditional skill/interest matching
    */
   calculateBaseScore(opportunity) {
-    const userSkills = this.userProfile?.skills || [];
-    const userInterests = this.userProfile?.interests || [];
-    
-    let score = 0;
-    
-    // Skill matching
-    if (opportunity.requiredSkills) {
-      const skillMatches = opportunity.requiredSkills.filter(skill => 
-        userSkills.includes(skill)
-      ).length;
-      score += (skillMatches / Math.max(opportunity.requiredSkills.length, 1)) * 0.6;
+    // Ensure userProfile exists and has default values
+    if (!this.userProfile) {
+      this.userProfile = { skills: [], interests: [] };
     }
     
-    // Interest matching  
-    const category = this.categorizeOpportunity(opportunity);
-    if (userInterests.includes(category)) {
-      score += 0.4;
+    try {
+      const userSkills = this.userProfile.skills || [];
+      const userInterests = this.userProfile.interests || [];
+      
+      let score = 0;
+      
+      // Skill matching
+      if (opportunity.requiredSkills && Array.isArray(opportunity.requiredSkills)) {
+        const skillMatches = opportunity.requiredSkills.filter(skill => 
+          userSkills.includes(skill)
+        ).length;
+        const skillScore = (skillMatches / Math.max(opportunity.requiredSkills.length, 1)) * 0.6;
+        score += skillScore;
+      }
+      
+      // Interest matching  
+      const category = this.categorizeOpportunity(opportunity);
+      if (userInterests.includes(category)) {
+        score += 0.4;
+      }
+      
+      return score;
+    } catch (error) {
+      console.error('🚨 Error in calculateBaseScore for', opportunity?.title, ':', error);
+      throw error;
     }
-    
-    return score;
   }
 
   /**
    * Collaborative filtering - "users like you also liked"
    */
   calculateCollaborativeScore(opportunity) {
-    // Simplified collaborative filtering
-    // In a real system, this would compare with other users
-    
-    const similarOrganizations = this.userInteractions
-      .filter(interaction => 
-        interaction.action === 'swipe_right' && 
-        interaction.opportunity.organization === opportunity.organization
-      ).length;
-    
-    const categoryPopularity = this.userInteractions
-      .filter(interaction => 
-        interaction.action === 'swipe_right' && 
-        interaction.opportunity.category === this.categorizeOpportunity(opportunity)
-      ).length;
-    
-    return Math.min(1, (similarOrganizations * 0.3 + categoryPopularity * 0.1) / 10);
+    try {
+      // Ensure userInteractions exists
+      if (!this.userInteractions) {
+        this.userInteractions = [];
+      }
+      
+      // Simplified collaborative filtering
+      // In a real system, this would compare with other users
+      const similarOrganizations = this.userInteractions
+        .filter(interaction => 
+          interaction?.action === 'swipe_right' && 
+          interaction?.opportunity?.organization === opportunity.organization
+        ).length;
+      
+      const categoryPopularity = this.userInteractions
+        .filter(interaction => 
+          interaction?.action === 'swipe_right' && 
+          interaction?.opportunity?.category === this.categorizeOpportunity(opportunity)
+        ).length;
+      
+      const score = Math.min(1, (similarOrganizations * 0.3 + categoryPopularity * 0.1) / 10);
+      return score;
+    } catch (error) {
+      console.error('🚨 Error in calculateCollaborativeScore for', opportunity?.title, ':', error);
+      return 0.3; // Return default score on error
+    }
   }
 
   /**
    * Content-based score using learned preferences
    */
   calculateContentScore(opportunity) {
-    let score = 0;
-    const category = this.categorizeOpportunity(opportunity);
-    
-    // Category preference
-    const categoryPref = this.userPreferences.categories[category] || 0;
-    score += Math.min(1, categoryPref / 10) * 0.4;
-    
-    // Skills preference
-    if (opportunity.requiredSkills) {
-      const skillScore = opportunity.requiredSkills.reduce((sum, skill) => {
-        return sum + (this.userPreferences.skills[skill] || 0);
-      }, 0) / opportunity.requiredSkills.length;
-      score += Math.min(1, skillScore / 5) * 0.3;
+    // Ensure userPreferences exists and has the required structure
+    if (!this.userPreferences) {
+      this.userPreferences = {
+        categories: {},
+        skills: {},
+        organizations: {},
+        durations: {},
+        timeSlots: {},
+        locations: {}
+      };
     }
     
-    // Duration preference
-    const durationRange = this.getDurationRange(opportunity.duration);
-    const durationPref = this.userPreferences.durations[durationRange] || 0;
-    score += Math.min(1, durationPref / 5) * 0.2;
+    // Ensure each sub-object exists
+    if (!this.userPreferences.categories) this.userPreferences.categories = {};
+    if (!this.userPreferences.skills) this.userPreferences.skills = {};
+    if (!this.userPreferences.organizations) this.userPreferences.organizations = {};
+    if (!this.userPreferences.durations) this.userPreferences.durations = {};
+    if (!this.userPreferences.timeSlots) this.userPreferences.timeSlots = {};
+    if (!this.userPreferences.locations) this.userPreferences.locations = {};
     
-    // Organization preference
-    const orgPref = this.userPreferences.organizations[opportunity.organization] || 0;
-    score += Math.min(1, orgPref / 3) * 0.1;
+    let score = 0;
     
-    return score;
+    try {
+      const category = this.categorizeOpportunity(opportunity);
+      
+      // Category preference
+      const categoryPref = this.userPreferences.categories[category] || 0;
+      score += Math.min(1, categoryPref / 10) * 0.4;
+      
+      // Skills preference
+      if (opportunity.requiredSkills && Array.isArray(opportunity.requiredSkills)) {
+        const skillScore = opportunity.requiredSkills.reduce((sum, skill) => {
+          return sum + (this.userPreferences.skills[skill] || 0);
+        }, 0) / opportunity.requiredSkills.length;
+        score += Math.min(1, skillScore / 5) * 0.3;
+      }
+      
+      // Duration preference
+      const durationRange = this.getDurationRange(opportunity.duration || 0);
+      const durationPref = this.userPreferences.durations[durationRange] || 0;
+      score += Math.min(1, durationPref / 5) * 0.2;
+      
+      // Organization preference
+      const orgPref = this.userPreferences.organizations[opportunity.organization || ''] || 0;
+      score += Math.min(1, orgPref / 3) * 0.1;
+      
+      return score;
+    } catch (error) {
+      console.error('🚨 Error in calculateContentScore for', opportunity?.title, ':', error);
+      return 0.5; // Return default score on error
+    }
   }
 
   /**
    * Behavioral patterns (time of day, session length, etc.)
    */
   calculateBehavioralScore(opportunity) {
-    const currentHour = new Date().getHours();
-    const timeSlot = this.getTimeSlot(currentHour);
-    const timeSlotPref = this.userPreferences.timeSlots[timeSlot] || 0;
+    // Ensure userPreferences exists
+    if (!this.userPreferences) {
+      this.userPreferences = {
+        categories: {},
+        skills: {},
+        organizations: {},
+        durations: {},
+        timeSlots: {},
+        locations: {}
+      };
+    }
     
-    // Session context
-    const sessionLength = Date.now() - this.sessionData.sessionStartTime;
-    const sessionFatigue = Math.max(0, 1 - (sessionLength / (1000 * 60 * 15))); // Fatigue after 15 min
+    if (!this.userPreferences.timeSlots) {
+      this.userPreferences.timeSlots = {};
+    }
     
-    return Math.min(1, timeSlotPref / 5) * sessionFatigue;
+    try {
+      const currentHour = new Date().getHours();
+      const timeSlot = this.getTimeSlot(currentHour);
+      const timeSlotPref = this.userPreferences.timeSlots[timeSlot] || 0;
+      
+      // Session context
+      const sessionLength = Date.now() - (this.sessionData?.sessionStartTime || Date.now());
+      const sessionFatigue = Math.max(0, 1 - (sessionLength / (1000 * 60 * 15))); // Fatigue after 15 min
+      
+      const score = Math.min(1, timeSlotPref / 5) * sessionFatigue;
+      return score;
+    } catch (error) {
+      console.error('🚨 Error in calculateBehavioralScore for', opportunity?.title, ':', error);
+      return 0.5; // Return default score on error
+    }
   }
 
   /**
    * Exploration bonus to prevent filter bubbles
    */
   calculateExplorationBonus(opportunity) {
-    const category = this.categorizeOpportunity(opportunity);
-    const categoryViews = this.userInteractions
-      .filter(interaction => interaction.opportunity.category === category).length;
-    
-    // Bonus for less-explored categories
-    const explorationBonus = Math.max(0, 1 - (categoryViews / 20));
-    
-    // Random exploration (5% chance)
-    const randomBonus = Math.random() < 0.05 ? 0.3 : 0;
-    
-    return explorationBonus + randomBonus;
+    try {
+      // Ensure userInteractions exists
+      if (!this.userInteractions) {
+        this.userInteractions = [];
+      }
+      
+      const category = this.categorizeOpportunity(opportunity);
+      const categoryViews = this.userInteractions
+        .filter(interaction => interaction?.opportunity?.category === category).length;
+      
+      // Bonus for less-explored categories
+      const explorationBonus = Math.max(0, 1 - (categoryViews / 20));
+      
+      // Random exploration (5% chance)
+      const randomBonus = Math.random() < 0.05 ? 0.3 : 0;
+      
+      const score = explorationBonus + randomBonus;
+      return score;
+    } catch (error) {
+      console.error('🚨 Error in calculateExplorationBonus for', opportunity?.title, ':', error);
+      return 0.2; // Return default score on error
+    }
   }
 
   /**
    * Get ranked recommendations for opportunities
    */
   getRecommendations(opportunities, count = 10) {
-    // Calculate scores for all opportunities
-    const scoredOpportunities = opportunities.map(opportunity => ({
-      ...opportunity,
-      recommendationScore: this.calculateRecommendationScore(opportunity),
-      timestamp: Date.now()
-    }));
+    console.log('🔍 getRecommendations called with:', { opportunities: opportunities?.length, count });
+    console.log('🔍 this.userProfile state:', this.userProfile);
+    console.log('🔍 this.userId state:', this.userId);
+    
+    let scoredOpportunities;
+    
+    try {
+      // Calculate scores for all opportunities
+      console.log('🧪 Starting opportunity scoring...');
+      scoredOpportunities = opportunities.map((opportunity, index) => {
+        try {
+          const score = this.calculateRecommendationScore(opportunity);
+          return {
+            ...opportunity,
+            recommendationScore: score,
+            timestamp: Date.now()
+          };
+        } catch (error) {
+          console.error(`🚨 Error scoring opportunity ${index + 1} (${opportunity?.title}):`, error);
+          return {
+            ...opportunity,
+            recommendationScore: 0.5, // Default score
+            timestamp: Date.now()
+          };
+        }
+      });
+      console.log('✅ All opportunities scored successfully');
+    } catch (error) {
+      console.error('🚨 Error in getRecommendations opportunity mapping:', error);
+      throw error;
+    }
 
     // Sort by recommendation score
     const sorted = scoredOpportunities.sort((a, b) => 

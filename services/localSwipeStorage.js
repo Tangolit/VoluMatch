@@ -154,6 +154,35 @@ export const getUserSwipedOpportunitiesLocally = async (userId, allOpportunities
   }
 };
 
+// Remove a specific swipe for a user and opportunity
+export const removeSwipeLocally = async (userId, opportunityId) => {
+  try {
+    console.log('🗑️ Removing swipe for user:', userId, 'opportunity:', opportunityId);
+    
+    // Get all existing swipes
+    const swipesJson = await AsyncStorage.getItem(SWIPES_STORAGE_KEY);
+    const allSwipes = swipesJson ? JSON.parse(swipesJson) : [];
+    
+    // Remove the specific swipe
+    const updatedSwipes = allSwipes.filter(swipe => 
+      !(swipe.userID === userId && swipe.opportunityID === String(opportunityId))
+    );
+    
+    // Save updated swipes back to storage
+    await AsyncStorage.setItem(SWIPES_STORAGE_KEY, JSON.stringify(updatedSwipes));
+    
+    // Update last modified timestamp
+    await AsyncStorage.setItem('@swipes_last_updated', Date.now().toString());
+    
+    console.log('🗑️ Swipe removed successfully. Total swipes now:', updatedSwipes.length);
+    
+    return true;
+  } catch (error) {
+    console.error('Error removing swipe locally:', error);
+    throw error;
+  }
+};
+
 // Clear all swipes (for testing)
 export const clearSwipesLocally = async () => {
   try {

@@ -1,5 +1,5 @@
 // Profile screen for organization users
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -43,9 +43,9 @@ const OrganizationProfileScreen = ({ user, userProfile, onProfileUpdate, onLogou
 
   useEffect(() => {
     loadOrganizationOpportunities();
-  }, [user]);
+  }, [loadOrganizationOpportunities]);
 
-  const loadOrganizationOpportunities = async () => {
+  const loadOrganizationOpportunities = useCallback(async () => {
     if (!user?.uid) return;
     
     try {
@@ -58,7 +58,7 @@ const OrganizationProfileScreen = ({ user, userProfile, onProfileUpdate, onLogou
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [user?.uid]); // Dependencies for useCallback
 
   const handleSaveProfile = async () => {
     if (!formData.orgName.trim()) {
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     position: 'absolute',
-    top: 24,
+    top: 60,
     right: 24,
     flexDirection: 'row',
     alignItems: 'center',
