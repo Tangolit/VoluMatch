@@ -32,14 +32,37 @@ const SwipeScreenSimple = ({ user, userProfile }) => {
   const [filteredOpportunities, setFilteredOpportunities] = useState([]);
 
   useEffect(() => {
-    // Load opportunities immediately with mock data for faster loading
-    setOpportunities(mockOpportunities);
-    setLoading(false);
+    // Load opportunities from Firebase with fallback to mock data
+    loadOpportunities();
     
     // Initialize other features in background
     initializeRecommendationEngine();
     getUserLocation();
   }, []);
+
+  const loadOpportunities = async () => {
+    try {
+      setLoading(true);
+      console.log('🔍 Loading opportunities from Firestore...');
+      
+      // Try to fetch from Firestore first
+      const firestoreOpportunities = await fetchOpportunities(true); // publicOnly = true
+      
+      if (firestoreOpportunities && firestoreOpportunities.length > 0) {
+        console.log(`✅ Loaded ${firestoreOpportunities.length} opportunities from Firestore`);
+        setOpportunities(firestoreOpportunities);
+      } else {
+        console.log('⚠️ No opportunities in Firestore, using mock data');
+        setOpportunities(mockOpportunities);
+      }
+    } catch (error) {
+      console.error('❌ Error loading opportunities from Firestore:', error);
+      console.log('🔄 Falling back to mock data');
+      setOpportunities(mockOpportunities);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // TEMPORARILY DISABLED - May cause infinite loops
   // useEffect(() => {
@@ -123,34 +146,6 @@ const SwipeScreenSimple = ({ user, userProfile }) => {
     }
   };
 
-  // Load opportunities from Firestore with fallback to mock data
-  const loadOpportunities = async () => {
-    try {
-      setLoading(true);
-      
-      // Try to fetch from Firestore first
-      try {
-        const fetchedOpportunities = await fetchOpportunities();
-        if (fetchedOpportunities.length > 0) {
-          setOpportunities(fetchedOpportunities);
-          return;
-        }
-      } catch (firestoreError) {
-        console.log('Firestore not available, using mock data:', firestoreError.message);
-      }
-      
-      // Fallback to mock data if Firestore is not available or empty
-      setOpportunities(mockOpportunities);
-      
-    } catch (error) {
-      console.error('Error loading opportunities:', error);
-      Alert.alert('Error', 'Failed to load opportunities. Please try again.');
-      // Final fallback to mock data
-      setOpportunities(mockOpportunities);
-    } finally {
-      setLoading(false);
-    }
-  };
 
 
   // Handle right swipe (interested)

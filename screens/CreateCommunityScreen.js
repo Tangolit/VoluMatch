@@ -17,6 +17,36 @@ import { colors } from '../styles/colors';
 import { spacing } from '../styles/spacing';
 // Temporarily using mock service for development
 import { createCommunity } from '../services/mockFirestore';
+import SkillSelector from '../components/SkillSelector';
+
+// Predefined community tags
+const AVAILABLE_COMMUNITY_TAGS = [
+  'environment',
+  'education',
+  'health',
+  'children',
+  'elderly',
+  'animals',
+  'homelessness',
+  'hunger',
+  'technology',
+  'arts',
+  'culture',
+  'sports',
+  'community',
+  'safety',
+  'disaster_relief',
+  'sustainability',
+  'mental_health',
+  'accessibility',
+  'veterans',
+  'refugees',
+  'literacy',
+  'mentorship',
+  'fundraising',
+  'advocacy',
+  'social_justice'
+];
 
 /**
  * Create Community Screen
@@ -26,9 +56,9 @@ const CreateCommunityScreen = ({ navigation, user, userProfile }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    tags: '',
     isPublic: true
   });
+  const [selectedTags, setSelectedTags] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -51,7 +81,7 @@ const CreateCommunityScreen = ({ navigation, user, userProfile }) => {
       newErrors.description = 'Description must be less than 500 characters';
     }
 
-    if (formData.tags.trim() && formData.tags.split(',').length > 5) {
+    if (selectedTags.length > 5) {
       newErrors.tags = 'Maximum 5 tags allowed';
     }
 
@@ -67,14 +97,21 @@ const CreateCommunityScreen = ({ navigation, user, userProfile }) => {
     }
   };
 
-  const processTags = (tagString) => {
-    if (!tagString.trim()) return [];
+  const toggleTag = (tag) => {
+    const updatedTags = selectedTags.includes(tag)
+      ? selectedTags.filter(t => t !== tag)
+      : [...selectedTags, tag];
     
-    return tagString
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(tag => tag.length > 0)
-      .slice(0, 5); // Limit to 5 tags
+    if (updatedTags.length > 5) {
+      Alert.alert('Maximum Tags', 'You can select a maximum of 5 tags.');
+      return;
+    }
+    
+    setSelectedTags(updatedTags);
+    // Clear error when user makes changes
+    if (errors.tags) {
+      setErrors(prev => ({ ...prev, tags: null }));
+    }
   };
 
   const handleSubmit = async () => {
@@ -94,7 +131,7 @@ const CreateCommunityScreen = ({ navigation, user, userProfile }) => {
       const communityData = {
         name: formData.name.trim(),
         description: formData.description.trim(),
-        tags: processTags(formData.tags),
+        tags: selectedTags,
         isPublic: formData.isPublic
       };
 
@@ -208,13 +245,25 @@ const CreateCommunityScreen = ({ navigation, user, userProfile }) => {
             500
           )}
 
-          {renderInputField(
-            'Tags (comma-separated)',
-            'tags',
-            'e.g. environment, education, health',
-            false,
-            100
-          )}
+          {/* Tags Section with SkillSelector */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Community Tags</Text>
+            <Text style={styles.tagSubtitle}>
+              Select up to 5 tags that describe your community's focus
+            </Text>
+            <SkillSelector
+              skills={AVAILABLE_COMMUNITY_TAGS}
+              selectedSkills={selectedTags}
+              onToggle={toggleTag}
+              disabled={false}
+              placeholder="Search community tags..."
+              maxDisplayed={8}
+              showSearch={true}
+            />
+            {errors.tags && (
+              <Text style={styles.errorText}>{errors.tags}</Text>
+            )}
+          </View>
 
           {/* Privacy Setting */}
           <View style={styles.privacyContainer}>
@@ -405,6 +454,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.error[500],
     marginTop: 4,
+  },
+  tagSubtitle: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
   },
   privacyContainer: {
     marginBottom: spacing.md,

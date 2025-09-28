@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function getUserRole(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    }
+    
+    function isOrganization() {
+      return isAuthenticated() && getUserRole(request.auth.uid) == 'organization';
+    }
+    
+    function isCommunityMember(communityId, userId) {
+      return exists(/databases/$(database)/documents/communities/$(communityId)/members/$(userId));
+    }
+    
+    function isCommunityAdmin(communityId, userId) {
+      return exists(/databases/$(database)/documents/communities/$(communityId)/members/$(userId)) &&
+             get(/databases/$(database)/documents/communities/$(communityId)/members/$(userId)).data.role == 'admin';
+    }
+
+    // USERS COLLECTION
+    match /users/{userId} {
+      // Users can read their own data, others can read public profile info
+      allow read: if isAuthenticated();
+      // Users can only write their own data
+      allow write: if isOwner(userId);
+      
+      // User interests/swipes (private)
+      match /interests/{interestId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // OPPORTUNITIES COLLECTION
+    match /opportunities/{opportunityId} {
+      // Anyone authenticated can read public opportunities
+      allow read: if isAuthenticated();
+      // Organizations can create opportunities, creators can edit their own
+      allow create: if isAuthenticated() && isOrganization();
+      allow update, delete: if isAuthenticated() && 
+        (resource.data.createdByUID == request.auth.uid || isOrganization());
+    }
+
+    // COMMUNITIES COLLECTION
+    match /communities/{communityId} {
+      // Anyone can read public community info
+      allow read: if isAuthenticated();
+      // Anyone can create communities, admins can edit
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && 
+        (resource.data.createdBy == request.auth.uid || 
+         isCommunityAdmin(communityId, request.auth.uid));
+
+      // COMMUNITY MEMBERS SUBCOLLECTION
+      match /members/{userId} {
+        // Members can read member list
+        allow read: if isAuthenticated() && isCommunityMember(communityId, request.auth.uid);
+        // Users can join/leave, admins can manage members
+        allow write: if isAuthenticated() && 
+          (request.auth.uid == userId || isCommunityAdmin(communityId, request.auth.uid));
+      }
+
+      // COMMUNITY POSTS SUBCOLLECTION
+      match /posts/{postId} {
+        // Only community members can read posts
+        allow read: if isAuthenticated() && isCommunityMember(communityId, request.auth.uid);
+        // Members can create posts, post authors and admins can edit/delete
+        allow create: if isAuthenticated() && isCommunityMember(communityId, request.auth.uid);
+        allow update, delete: if isAuthenticated() && 
+          (resource.data.userId == request.auth.uid || 
+           isCommunityAdmin(communityId, request.auth.uid));
+
+        // POST COMMENTS SUBCOLLECTION  
+        match /comments/{commentId} {
+          // Members can read comments
+          allow read: if isAuthenticated() && isCommunityMember(communityId, request.auth.uid);
+          // Members can create comments, authors and admins can edit/delete
+          allow create: if isAuthenticated() && isCommunityMember(communityId, request.auth.uid);
+          allow update, delete: if isAuthenticated() && 
+            (resource.data.userId == request.auth.uid || 
+             isCommunityAdmin(communityId, request.auth.uid));
+        }
+
+        // POST REACTIONS SUBCOLLECTION
+        match /reactions/{userId} {
+          // Members can read reactions
+          allow read: if isAuthenticated() && isCommunityMember(communityId, request.auth.uid);
+          // Users can manage their own reactions
+          allow write: if isAuthenticated() && request.auth.uid == userId;
+        }
+      }
+    }
+
+    // TEST COLLECTION (for connection testing)
+    match /test/{document} {
+      allow read, write: if true; // Temporarily allow all for testing
+    }
+    
+    // TEMPORARY: Allow all access for initial testing (REMOVE IN PRODUCTION)
+    match /users/{document} {
+      allow read, write: if true;
+    }
+    match /opportunities/{document} {
+      allow read, write: if true;
+    }
+    match /communities/{document} {
+      allow read, write: if true;
+      
+      match /members/{userId} {
+        allow read, write: if true;
+      }
+    }
+
+    // BLOCK ALL OTHER ACCESS
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

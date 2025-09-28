@@ -5,11 +5,16 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../services/firebase';
-// Temporarily using mock service for development to avoid Firebase connection errors
+import { onAuthStateChanged } from 'firebase/auth';
+import { colors } from '../styles/colors';
+// Import both real and mock services
 import { fetchUserProfile, clearUserProfile } from '../services/mockFirestore';
+import { getUserProfile, createUserProfile } from '../services/firestore';
 
 // Import screens
 import AuthScreenSimple from '../screens/AuthScreenSimple';
+import LoginScreen from '../screens/LoginScreen';
+import SignupScreen from '../screens/SignupScreen';
 import SwipeScreenSimple from '../screens/SwipeScreenSimple';
 import MyOpportunitiesScreen from '../screens/MyOpportunitiesScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -25,10 +30,26 @@ import CommentsScreen from '../screens/CommentsScreen';
 import CommunityRequestsScreen from '../screens/CommunityRequestsScreen';
 import CommunitySwipeScreen from '../screens/CommunitySwipeScreen';
 import CommunityOpportunitiesScreen from '../screens/CommunityOpportunitiesScreen';
+import CommunityChatScreen from '../screens/CommunityChatScreen';
 
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
+const AuthStack = createStackNavigator();
+
+// Authentication Stack Navigator
+const AuthStackNavigator = () => {
+  return (
+    <AuthStack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="Signup" component={SignupScreen} />
+    </AuthStack.Navigator>
+  );
+};
 
 // Community Stack Navigator
 const CommunityStackNavigator = ({ user, userProfile }) => {
@@ -97,6 +118,14 @@ const CommunityStackNavigator = ({ user, userProfile }) => {
     />
   ), [user, userProfile]);
 
+  const renderCommunityChatScreen = useCallback((props) => (
+    <CommunityChatScreen
+      {...props}
+      user={user}
+      userProfile={userProfile}
+    />
+  ), [user, userProfile]);
+
   return (
     <Stack.Navigator
       screenOptions={{
@@ -111,6 +140,22 @@ const CommunityStackNavigator = ({ user, userProfile }) => {
       <Stack.Screen name="CommunityRequests" children={renderCommunityRequestsScreen} />
       <Stack.Screen name="CommunitySwipe" children={renderCommunitySwipeScreen} />
       <Stack.Screen name="CommunityOpportunities" children={renderCommunityOpportunitiesScreen} />
+      <Stack.Screen 
+        name="CommunityChat" 
+        children={renderCommunityChatScreen}
+        options={({ route }) => ({
+          headerShown: true,
+          headerTitle: `${route.params?.communityName || 'Community'} Chat`,
+          headerStyle: {
+            backgroundColor: colors.primary[500],
+          },
+          headerTitleStyle: {
+            color: colors.white,
+            fontWeight: 'bold',
+          },
+          headerTintColor: colors.white,
+        })}
+      />
     </Stack.Navigator>
   );
 };
@@ -291,34 +336,61 @@ const RootNavigator = () => {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    // For debugging: Skip Firebase auth and go directly to role selection
-    console.log('🔐 [DEBUG] Skipping Firebase auth for debugging');
-    
-    // Simulate a mock user for testing
-    const mockUser = {
-      uid: 'demo-user-123',
-      email: 'demo@example.com'
-    };
-    
-    setUser(mockUser);
-    setUserProfile(null); // This will trigger role selection
-    setAuthChecked(true);
-    setLoading(false);
-    
-    console.log('✅ [DEBUG] Mock user set, should show role selection');
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      try {
+        console.log('🔐 Auth state changed:', firebaseUser?.uid || 'No user');
+        setLoading(true);
+        
+        if (firebaseUser) {
+          // User is logged in
+          setUser(firebaseUser);
+          await loadUserProfile(firebaseUser.uid);
+        } else {
+          // User is logged out
+          setUser(null);
+          setUserProfile(null);
+        }
+      } catch (error) {
+        console.error('❌ Error handling auth state change:', error);
+      } finally {
+        setLoading(false);
+        setAuthChecked(true);
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
+
+  const loadUserProfile = async (userId) => {
+    try {
+      console.log('👤 Loading user profile for:', userId);
+      
+      // Try Firestore first, then fallback to mock
+      let profile;
+      try {
+        profile = await getUserProfile(userId);
+        if (profile) {
+          console.log('✅ User profile loaded from Firestore');
+        } else {
+          throw new Error('Profile not found in Firestore');
+        }
+      } catch (firestoreError) {
+        console.log('⚠️ Firestore failed, trying mock data:', firestoreError.message);
+        profile = await fetchUserProfile(userId);
+      }
+      
+      setUserProfile(profile);
+    } catch (error) {
+      console.error('❌ Error loading user profile:', error);
+      setUserProfile(null);
+    }
+  };
 
   const handleAuthSuccess = async (authUser) => {
     console.log('✅ Auth success:', authUser.uid);
     setUser(authUser);
-    
-    // Fetch user profile
-    try {
-      const profile = await fetchUserProfile(authUser.uid);
-      setUserProfile(profile);
-    } catch (error) {
-      console.error('Error fetching user profile after auth:', error);
-    }
+    await loadUserProfile(authUser.uid);
   };
 
   const handleProfileUpdate = useCallback((updatedProfile) => {
@@ -328,22 +400,15 @@ const RootNavigator = () => {
 
   const handleLogout = useCallback(async () => {
     try {
-      const currentUserId = user?.uid;
+      console.log('👋 Logging out user...');
       
-      // Clear user profile from storage first
-      if (currentUserId) {
-        await clearUserProfile(currentUserId);
-      }
-      
-      // Then sign out from Firebase
+      // Sign out from Firebase (this will trigger the auth state listener)
       await auth.signOut();
-      setUser(null);
-      setUserProfile(null);
-      console.log('👋 User logged out');
+      console.log('✅ User logged out successfully');
     } catch (error) {
-      console.error('Error logging out:', error);
+      console.error('❌ Error logging out:', error);
     }
-  }, [user?.uid]);
+  }, []);
 
   // Show loading spinner while checking auth
   if (loading || !authChecked) {
@@ -357,7 +422,7 @@ const RootNavigator = () => {
 
   // Show auth screen if no user
   if (!user) {
-    return <AuthScreenSimple onAuthSuccess={handleAuthSuccess} />;
+    return <AuthStackNavigator />;
   }
 
   // Show role selection if user has no profile or no role

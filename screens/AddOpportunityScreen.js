@@ -265,8 +265,14 @@ const AddOpportunityScreen = ({ user }) => {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContentContainer}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
@@ -480,24 +486,32 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollContentContainer: {
+    flexGrow: 1,
+  },
   header: {
     backgroundColor: '#fff',
-    padding: 24,
+    paddingHorizontal: 20,
+    paddingTop: 60, // Increased top padding for iPhone 16 status bar
+    paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#e1e8ed',
   },
   headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'flex-start',
+    position: 'relative',
   },
   headerText: {
     alignItems: 'center',
     flex: 1,
   },
   debugButton: {
+    position: 'absolute',
+    right: 0,
+    top: 8,
     padding: 8,
-    marginTop: 8,
   },
   headerTitle: {
     fontSize: 24,
@@ -512,7 +526,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   form: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   inputContainer: {
     marginBottom: 20,
@@ -572,6 +587,7 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: 20,
+    paddingBottom: 40, // Extra bottom padding to ensure buttons aren't cut off on iPhone 16
   },
   submitButton: {
     backgroundColor: '#e74c3c',

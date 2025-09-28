@@ -23,6 +23,8 @@ import {
   fetchUserCommunities, 
   shareOpportunityToCommunity 
 } from '../services/mockFirestore';
+// Import real Firestore functions
+import { fetchOrganizationOpportunities } from '../services/firestore';
 
 const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
   console.log('📋 MyOpportunitiesScreen mounted');
@@ -37,22 +39,47 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
   const [userCommunities, setUserCommunities] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
-  // Get swiped opportunities from local storage
-  const getSwipedOpportunities = async (userId) => {
+  // Get opportunities based on user role
+  const getMyOpportunities = async (userId) => {
     try {
-      console.log('🔍 getSwipedOpportunities called with userId:', userId);
+      console.log('🔍 getMyOpportunities called with userId:', userId);
+      console.log('🔍 User role:', userProfile?.role);
       
-      // Skip Firestore for now and go directly to local storage
-      console.log('🔍 Using local storage directly...');
-      console.log('🔍 mockOpportunities length:', mockOpportunities.length);
-      
-      const result = await getUserSwipedOpportunitiesLocally(userId, mockOpportunities);
-      console.log('🔍 getUserSwipedOpportunitiesLocally returned:', result.length, 'opportunities');
-      
-      return result;
+       // For organizations, get opportunities they created
+       if (userProfile?.role === 'organization') {
+         console.log('🏢 Loading opportunities created by organization...');
+         try {
+           // Try Firestore first
+           const firestoreResult = await fetchOrganizationOpportunities(userId);
+           if (firestoreResult && firestoreResult.length > 0) {
+             console.log('🔍 fetchOrganizationOpportunities (Firestore) returned:', firestoreResult.length, 'opportunities');
+             return firestoreResult;
+           } else {
+             console.log('⚠️ No opportunities in Firestore, using mock data');
+             const { fetchOrganizationOpportunities: mockFetch } = require('../services/mockFirestore');
+             const result = await mockFetch(userId);
+             console.log('🔍 fetchOrganizationOpportunities (Mock) returned:', result.length, 'opportunities');
+             return result;
+           }
+         } catch (error) {
+           console.error('❌ Error loading from Firestore, falling back to mock:', error);
+           const { fetchOrganizationOpportunities: mockFetch } = require('../services/mockFirestore');
+           const result = await mockFetch(userId);
+           console.log('🔍 fetchOrganizationOpportunities (Fallback) returned:', result.length, 'opportunities');
+           return result;
+         }
+      } else {
+        // For volunteers, get swiped opportunities from local storage
+        console.log('👥 Loading swiped opportunities for volunteer...');
+        console.log('🔍 mockOpportunities length:', mockOpportunities.length);
+        
+        const result = await getUserSwipedOpportunitiesLocally(userId, mockOpportunities);
+        console.log('🔍 getUserSwipedOpportunitiesLocally returned:', result.length, 'opportunities');
+        return result;
+      }
       
     } catch (error) {
-      console.error('🚨 Error in getSwipedOpportunities:', error);
+      console.error('🚨 Error in getMyOpportunities:', error);
       return [];
     }
   };
@@ -184,8 +211,8 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
         console.error('📋 AsyncStorage test failed:', testError);
       }
       
-      // Get swiped opportunities from local storage or Firestore
-      const userOpportunities = await getSwipedOpportunities(userId);
+      // Get opportunities based on user role
+      const userOpportunities = await getMyOpportunities(userId);
       
       console.log('📋 Loaded', userOpportunities.length, 'opportunities');
       
@@ -292,15 +319,19 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
       <Ionicons name="heart-outline" size={80} color="#bdc3c7" />
       <Text style={styles.emptyTitle}>No Opportunities Yet</Text>
       <Text style={styles.emptyText}>
-        You haven't shown interest in any opportunities yet.{'\n'}
-        Start swiping to find causes you care about!
+        {userProfile?.role === 'organization' 
+          ? "You haven't created any opportunities yet.\nCreate your first opportunity to start connecting with volunteers!"
+          : "You haven't shown interest in any opportunities yet.\nStart swiping to find causes you care about!"
+        }
       </Text>
       <TouchableOpacity 
         style={styles.discoverButton}
-        onPress={() => navigation.navigate('Discover')}
+        onPress={() => navigation.navigate(userProfile?.role === 'organization' ? 'AddOpportunity' : 'Discover')}
       >
-        <Ionicons name="search" size={20} color="#fff" />
-        <Text style={styles.discoverButtonText}>Discover Opportunities</Text>
+        <Ionicons name={userProfile?.role === 'organization' ? "add" : "search"} size={20} color="#fff" />
+        <Text style={styles.discoverButtonText}>
+          {userProfile?.role === 'organization' ? 'Create Opportunity' : 'Discover Opportunities'}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -342,7 +373,10 @@ const MyOpportunitiesScreen = ({ navigation, user, userProfile }) => {
       <View style={styles.headerContent}>
         <Text style={styles.headerTitle}>My Opportunities</Text>
         <Text style={styles.headerSubtitle}>
-          {opportunities.length} {opportunities.length === 1 ? 'opportunity' : 'opportunities'} you're interested in
+          {userProfile?.role === 'organization' 
+            ? `${opportunities.length} ${opportunities.length === 1 ? 'opportunity' : 'opportunities'} you've created`
+            : `${opportunities.length} ${opportunities.length === 1 ? 'opportunity' : 'opportunities'} you're interested in`
+          }
         </Text>
       </View>
       <TouchableOpacity 

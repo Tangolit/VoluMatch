@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../styles/colors';
 import { spacing } from '../styles/spacing';
 import CommunityCard from '../components/CommunityCard';
-// Temporarily using mock service for development
+// Using both mock and real Firestore services
 import {
   fetchCommunities,
   fetchUserCommunities,
@@ -25,6 +25,11 @@ import {
   getJoinRequestStatus,
   rescindJoinRequest
 } from '../services/mockFirestore';
+// Import real Firestore functions  
+import { 
+  fetchFirestoreCommunities, 
+  fetchUserFirestoreCommunities 
+} from '../services/firestore';
 
 /**
  * Communities List Screen
@@ -55,10 +60,29 @@ const CommunitiesListScreen = ({ navigation, user, userProfile }) => {
 
     try {
       setLoading(true);
-      const [allCommunities, joinedCommunities] = await Promise.all([
-        fetchCommunities(),
-        fetchUserCommunities(user.uid)
-      ]);
+      
+      // Try Firestore first, fallback to mock
+      let allCommunities, joinedCommunities;
+      
+      try {
+        console.log('🔍 Loading communities from Firestore...');
+        [allCommunities, joinedCommunities] = await Promise.all([
+          fetchFirestoreCommunities(),
+          fetchUserFirestoreCommunities(user.uid)
+        ]);
+        
+        if (allCommunities && allCommunities.length > 0) {
+          console.log(`✅ Loaded ${allCommunities.length} communities from Firestore`);
+        } else {
+          throw new Error('No communities in Firestore');
+        }
+      } catch (firestoreError) {
+        console.log('⚠️ Firestore failed, using mock data:', firestoreError.message);
+        [allCommunities, joinedCommunities] = await Promise.all([
+          fetchCommunities(),
+          fetchUserCommunities(user.uid)
+        ]);
+      }
 
       console.log('🔍 CommunitiesListScreen loadCommunities:', {
         allCommunitiesCount: allCommunities.length,

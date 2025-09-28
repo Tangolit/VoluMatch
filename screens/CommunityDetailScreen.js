@@ -173,6 +173,14 @@ const CommunityDetailScreen = ({ navigation, route, user, userProfile }) => {
     });
   };
 
+  const handleOpenChat = () => {
+    console.log('💬 Opening community chat');
+    navigation.navigate('CommunityChat', {
+      communityId: community.id,
+      communityName: community.name
+    });
+  };
+
 
   const handleCreatePost = () => {
     if (!isJoined) {
@@ -369,30 +377,42 @@ const CommunityDetailScreen = ({ navigation, route, user, userProfile }) => {
             )}
           </TouchableOpacity>
 
-          {/* Second row - member actions */}
-          {isJoined && (
-            <View style={styles.secondaryButtonsRow}>
-              <TouchableOpacity
-                style={styles.createPostButton}
-                onPress={handleCreatePost}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="add" size={18} color={colors.white} style={styles.buttonIcon} />
-                <Text style={styles.createPostButtonText}>Create Post</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.opportunitiesButton}
-                onPress={handleBrowseOpportunities}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="briefcase" size={18} color={colors.primary[500]} style={styles.buttonIcon} />
-                <Text style={styles.opportunitiesButtonText}>
-                  {hasOpportunities ? 'Opportunities' : 'No Opportunities'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+      {/* Second row - member actions */}
+      {isJoined && (
+        <View style={styles.secondaryButtonsRow}>
+          <TouchableOpacity
+            style={styles.createPostButton}
+            onPress={handleCreatePost}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={18} color={colors.white} style={styles.buttonIcon} />
+            <Text style={styles.createPostButtonText}>Create Post</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.chatButton}
+            onPress={handleOpenChat}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chatbubble" size={18} color={colors.white} style={styles.buttonIcon} />
+            <Text style={styles.chatButtonText}>Chat</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Third row - opportunities (full width for better visibility) */}
+      {isJoined && (
+        <TouchableOpacity
+          style={styles.opportunitiesButton}
+          onPress={handleBrowseOpportunities}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="briefcase" size={18} color={colors.primary[500]} style={styles.buttonIcon} />
+          <Text style={styles.opportunitiesButtonText}>
+            {hasOpportunities ? 'Browse Opportunities' : 'No Opportunities Available'}
+          </Text>
+        </TouchableOpacity>
+      )}
 
           {/* Owner-only button */}
           {isOwner && userProfile?.role === 'organization' && (
@@ -612,6 +632,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 0.3,
   },
+  chatButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 14,
+    backgroundColor: colors.accent[500],
+    flex: 1,
+    minHeight: 48,
+  },
+  chatButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.white,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
   requestsButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -643,8 +681,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderWidth: 1.5,
     borderColor: colors.primary[500],
-    flex: 1,
+    width: '100%',
     minHeight: 48,
+    marginTop: spacing.sm,
   },
   opportunitiesButtonText: {
     fontSize: 15,

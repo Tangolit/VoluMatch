@@ -1,28 +1,52 @@
 // Firebase configuration and initialization
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Firebase config - replace with your actual config
-// For development, using placeholder config to avoid connection errors
+// Firebase config - Production configuration
 const firebaseConfig = {
-  apiKey: "demo-api-key",
-  authDomain: "demo-project.firebaseapp.com",
-  projectId: "demo-project-id",
-  storageBucket: "demo-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "demo-app-id"
+  apiKey: "AIzaSyAuJWQ1773nfLUIA_CoZmADHCnNQDrR1IM",
+  authDomain: "volunteer-tinder-50896.firebaseapp.com",
+  projectId: "volunteer-tinder-50896",
+  storageBucket: "volunteer-tinder-50896.firebasestorage.app",
+  messagingSenderId: "466619638687",
+  appId: "1:466619638687:web:d7401b54a0f1491fdb53aa",
+  measurementId: "G-FV2PZ0DH6D"
 };
+
+console.log('🔥 Initializing Firebase...');
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+console.log('✅ Firebase app initialized');
 
 // Initialize Firebase Auth with AsyncStorage persistence
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
-export const db = getFirestore(app);
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+  console.log('✅ Firebase Auth initialized');
+} catch (error) {
+  console.error('❌ Firebase Auth initialization error:', error);
+  throw error;
+}
 
+// Initialize Firestore with fallback
+let db;
+let firestoreAvailable = false;
+try {
+  db = getFirestore(app);
+  firestoreAvailable = true;
+  console.log('✅ Firestore initialized');
+} catch (error) {
+  console.error('❌ Firestore initialization error:', error);
+  console.log('⚠️ Firestore not available - app will use mock data');
+  // Don't throw error, let app continue with mock data
+  db = null;
+}
+
+export { auth, db, firestoreAvailable };
 export default app;
 
