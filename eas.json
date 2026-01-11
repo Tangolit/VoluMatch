@@ -1,0 +1,49 @@
+{
+  "cli": {
+    "version": ">= 13.2.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyAuJWQ1773nfLUIA_CoZmADHCnNQDrR1IM",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "volunteer-tinder-50896.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "volunteer-tinder-50896",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "volunteer-tinder-50896.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "466619638687",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:466619638687:web:d7401b54a0f1491fdb53aa",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-FV2PZ0DH6D"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "your-apple-id@email.com",
+        "ascAppId": "your-app-store-connect-app-id",
+        "appleTeamId": "your-apple-team-id"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal"
+      }
+    }
+  }
+}
+

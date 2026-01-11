@@ -5,7 +5,7 @@ import {
   Text,
   StyleSheet
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from './LazyIonicons';
 
 const BadgeIcon = ({ badge, size = 80 }) => {
   const iconSize = size * 0.4;

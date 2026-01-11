@@ -53,7 +53,7 @@ const AuthScreenSimple = ({ navigation, onAuthSuccess }) => {
       <StatusBar style="dark" />
       
       <View style={styles.header}>
-        <Text style={styles.title}>Volunteer Connect</Text>
+        <Text style={styles.title}>VoluMatch</Text>
         <Text style={styles.subtitle}>
           {isLogin ? 'Welcome back!' : 'Join the community'}
         </Text>

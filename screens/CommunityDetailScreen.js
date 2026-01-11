@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// Community Detail Screen - Direct conversion from Figma Make HTML
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,14 +8,16 @@ import {
   RefreshControl,
   Alert,
   TouchableOpacity,
-  SafeAreaView,
-  ActivityIndicator
+  TextInput,
+  Image,
+  ImageBackground,
+  ScrollView,
+  StatusBar,
+  ActivityIndicator,
+  Animated,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../styles/colors';
-import { spacing } from '../styles/spacing';
-import CommunityPostCard from '../components/CommunityPostCard';
-// Temporarily using mock service for development
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from '../components/LazyIonicons';
 import {
   fetchCommunityById,
   fetchCommunityPosts,
@@ -24,25 +27,29 @@ import {
   updatePostReactions,
   deleteCommunityPost,
   getUserReactions,
-  fetchOrganizationRequests,
   fetchCommunityOpportunities
-} from '../services/mockFirestore';
+} from '../services/firestore';
 
-/**
- * Community Detail Screen
- * Shows community info and posts feed
- */
 const CommunityDetailScreen = ({ navigation, route, user, userProfile }) => {
-  const { communityId, communityName } = route.params;
+  const { communityId, communityName } = route.params || {};
   const [community, setCommunity] = useState(null);
   const [posts, setPosts] = useState([]);
+  const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isJoined, setIsJoined] = useState(false);
   const [membershipLoading, setMembershipLoading] = useState(false);
   const [userReactions, setUserReactions] = useState({});
-  const [isOwner, setIsOwner] = useState(false);
-  const [hasOpportunities, setHasOpportunities] = useState(false);
+  const [activeTab, setActiveTab] = useState('feed');
+  const [postText, setPostText] = useState('');
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Nav title opacity based on scroll
+  const navTitleOpacity = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
 
   useEffect(() => {
     loadCommunityData();
@@ -53,38 +60,30 @@ const CommunityDetailScreen = ({ navigation, route, user, userProfile }) => {
 
     try {
       setLoading(true);
-      const [communityData, postsData, membershipStatus] = await Promise.all([
+      const [communityData, postsData, membershipStatus, opportunitiesData] = await Promise.all([
         fetchCommunityById(communityId),
         fetchCommunityPosts(communityId),
-        isUserMemberOfCommunity(communityId, user.uid)
+        isUserMemberOfCommunity(communityId, user.uid),
+        fetchCommunityOpportunities(communityId)
       ]);
 
       setCommunity(communityData);
       setIsJoined(membershipStatus);
+      setOpportunities(opportunitiesData || []);
       
-      // Check if user is the owner of this community
-      setIsOwner(communityData?.createdBy === user.uid);
-      
-      // Only show posts if user is a member or owner (for both public and private communities)
       if (membershipStatus || communityData?.createdBy === user.uid) {
         setPosts(postsData);
-      } else {
-        setPosts([]); // Don't show posts if not a member
-      }
-
-      // Check if there are opportunities shared with this community
-      const communityOpportunities = await fetchCommunityOpportunities(communityId);
-      setHasOpportunities(communityOpportunities.length > 0);
-
-      // Load user reactions for all posts
       if (postsData.length > 0) {
         const postIds = postsData.map(post => post.id);
         const reactions = await getUserReactions(user.uid, postIds);
         setUserReactions(reactions);
+        }
+      } else {
+        setPosts([]);
       }
     } catch (error) {
       console.error('Error loading community data:', error);
-      Alert.alert('Error', 'Failed to load community. Please try again.');
+      Alert.alert('Error', 'Failed to load community.');
     } finally {
       setLoading(false);
     }
@@ -93,46 +92,32 @@ const CommunityDetailScreen = ({ navigation, route, user, userProfile }) => {
   const handleJoinToggle = async () => {
     if (!user || membershipLoading) return;
 
-    // Show confirmation dialog before leaving
     if (isJoined) {
       Alert.alert(
         'Leave Community',
-        `Are you sure you want to leave "${community?.name || 'this community'}"?\n\nYou'll no longer see posts from this community and will need to request to join again if it's private.`,
+        `Are you sure you want to leave "${community?.name}"?`,
         [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Leave',
-            style: 'destructive',
-            onPress: () => performLeaveCommunity(),
-          },
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Leave', style: 'destructive', onPress: performLeaveCommunity },
         ]
       );
       return;
     }
 
-    // For joining, check if community is private
     if (!community?.isPublic) {
-      Alert.alert('Error', 'This is a private community. You need to request access and wait for approval from the community owner.');
+      Alert.alert('Private Community', 'This is a private community. Request access to join.');
       return;
     }
 
-    // For public communities, proceed directly
     try {
       setMembershipLoading(true);
       await joinCommunity(communityId, user.uid);
       setIsJoined(true);
       setCommunity(prev => prev ? { ...prev, memberCount: prev.memberCount + 1 } : null);
-      
-      // Reload community data to ensure UI is in sync
       await loadCommunityData();
-      
-      Alert.alert('Success', `Joined ${community?.name || 'community'}`);
+      Alert.alert('Success', `Joined ${community?.name}`);
     } catch (error) {
-      console.error('Error joining community:', error);
-      Alert.alert('Error', 'Failed to join community. Please try again.');
+      Alert.alert('Error', 'Failed to join community.');
     } finally {
       setMembershipLoading(false);
     }
@@ -144,96 +129,71 @@ const CommunityDetailScreen = ({ navigation, route, user, userProfile }) => {
       await leaveCommunity(communityId, user.uid);
       setIsJoined(false);
       setCommunity(prev => prev ? { ...prev, memberCount: prev.memberCount - 1 } : null);
-      
-      // Clear posts when leaving - user shouldn't see content anymore
       setPosts([]);
-      
-      // Reload community data to ensure UI is in sync
-      await loadCommunityData();
-      
-      Alert.alert('Success', `Left ${community?.name || 'community'}`);
+      Alert.alert('Success', `Left ${community?.name}`);
     } catch (error) {
-      console.error('Error leaving community:', error);
-      Alert.alert('Error', 'Failed to leave community. Please try again.');
+      Alert.alert('Error', 'Failed to leave community.');
     } finally {
       setMembershipLoading(false);
     }
   };
 
-  const handleViewRequests = () => {
-    navigation.navigate('CommunityRequests', { 
-      communityId: communityId,
-      communityName: community?.name 
-    });
-  };
-
-  const handleBrowseOpportunities = () => {
-    navigation.navigate('CommunityOpportunities', {
-      community: community
-    });
-  };
-
-  const handleOpenChat = () => {
-    console.log('💬 Opening community chat');
-    navigation.navigate('CommunityChat', {
-      communityId: community.id,
-      communityName: community.name
-    });
-  };
-
-
   const handleCreatePost = () => {
     if (!isJoined) {
-      Alert.alert('Join Required', 'You must join this community to create posts.');
+      Alert.alert('Join Required', 'Join this community to create posts.');
       return;
     }
-    navigation.navigate('CreatePost', { 
-      communityId, 
-      communityName: community?.name 
-    });
+    navigation.navigate('CreatePost', { communityId, communityName: community?.name });
   };
 
   const handleReactionPress = async (postId, reactionType) => {
-    try {
-      const result = await updatePostReactions(postId, reactionType, user.uid);
-
-      // Update local state
-      setPosts(prev => prev.map(p => 
-        p.id === postId 
-          ? { ...p, reactions: result.reactions }
-          : p
-      ));
-
-      // Update user reactions state
+    // Optimistic update - update UI immediately
+    const currentlyReacted = userReactions[postId]?.[reactionType] || false;
+    const newReactedState = !currentlyReacted;
+    
+    // Update user reactions state immediately
+    setUserReactions(prev => ({
+      ...prev,
+      [postId]: { ...prev[postId], [reactionType]: newReactedState }
+    }));
+    
+    // Update post reactions count immediately
+    setPosts(prev => prev.map(p => {
+      if (p.id === postId) {
+        const currentCount = p.reactions?.[reactionType] || 0;
+        return {
+          ...p,
+          reactions: {
+            ...p.reactions,
+            [reactionType]: newReactedState ? currentCount + 1 : Math.max(0, currentCount - 1)
+          }
+        };
+      }
+      return p;
+    }));
+    
+    // Sync with server in background (don't await)
+    updatePostReactions(postId, reactionType, user.uid).catch(error => {
+      console.error('Error syncing reaction:', error);
+      // Revert on error
       setUserReactions(prev => ({
         ...prev,
-        [postId]: {
-          ...prev[postId],
-          [reactionType]: result.userReacted
-        }
+        [postId]: { ...prev[postId], [reactionType]: currentlyReacted }
       }));
-    } catch (error) {
-      console.error('Error updating reactions:', error);
-      Alert.alert('Error', 'Failed to update reaction. Please try again.');
-    }
-  };
-
-  const handleCommentPress = (post) => {
-    navigation.navigate('Comments', { 
-      postId: post.id,
-      postContent: post.content 
+      setPosts(prev => prev.map(p => {
+        if (p.id === postId) {
+          const currentCount = p.reactions?.[reactionType] || 0;
+          return {
+            ...p,
+            reactions: {
+              ...p.reactions,
+              [reactionType]: currentlyReacted ? currentCount + 1 : Math.max(0, currentCount - 1)
+            }
+          };
+        }
+        return p;
+      }));
     });
-  };
-
-  const handleDeletePost = async (postId) => {
-    try {
-      await deleteCommunityPost(postId);
-      setPosts(prev => prev.filter(p => p.id !== postId));
-      Alert.alert('Success', 'Post deleted successfully');
-    } catch (error) {
-      console.error('Error deleting post:', error);
-      Alert.alert('Error', 'Failed to delete post. Please try again.');
-    }
   };
 
   const onRefresh = async () => {
@@ -242,198 +202,15 @@ const CommunityDetailScreen = ({ navigation, route, user, userProfile }) => {
     setRefreshing(false);
   };
 
-  const renderPost = ({ item }) => (
-    <CommunityPostCard
-      post={item}
-      currentUser={user}
-      userReactions={userReactions[item.id] || { like: false }}
-      onReactionPress={handleReactionPress}
-      onCommentPress={handleCommentPress}
-      onDeletePress={handleDeletePost}
-    />
-  );
-
-  const renderEmptyState = () => {
-    // Show different messages based on community privacy and membership
-    const getEmptyStateMessage = () => {
-      if (!isJoined && !isOwner) {
-        // User is not a member and not the owner
-        if (!community?.isPublic) {
-          return {
-            icon: 'lock-closed',
-            title: 'Private Community',
-            subtitle: 'This is a private community. Join to see posts and participate in discussions.'
-          };
-        } else {
-          return {
-            icon: 'people-outline',
-            title: 'Join to See Posts',
-            subtitle: 'You need to join this community to see posts and participate in discussions.'
-          };
-        }
-      } else if (isJoined) {
-        return {
-          icon: 'chatbubbles-outline',
-          title: 'No Posts Yet',
-          subtitle: 'Be the first to start a conversation!'
-        };
-      } else {
-        return {
-          icon: 'chatbubbles-outline',
-          title: 'No Posts Yet',
-          subtitle: 'Join this community to see and create posts'
-        };
-      }
-    };
-
-    const emptyState = getEmptyStateMessage();
-
-    return (
-      <View style={styles.emptyState}>
-        <Ionicons name={emptyState.icon} size={64} color={colors.gray[400]} />
-        <Text style={styles.emptyTitle}>{emptyState.title}</Text>
-        <Text style={styles.emptySubtitle}>{emptyState.subtitle}</Text>
-        {isJoined && (
-          <TouchableOpacity
-            style={styles.createFirstPostButton}
-            onPress={handleCreatePost}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.createFirstPostButtonText}>Create First Post</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  };
-
-  const renderHeader = () => {
-    if (!community) return null;
-
-    return (
-      <View style={styles.headerContainer}>
-        <Text style={styles.communityName}>{community.name}</Text>
-        {community.description && (
-          <Text style={styles.communityDescription}>{community.description}</Text>
-        )}
-        
-        {/* Community stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.stat}>
-            <Ionicons name="people" size={16} color={colors.gray[600]} />
-            <Text style={styles.statText}>
-              {community.memberCount || 0} members
-            </Text>
-          </View>
-          <View style={styles.stat}>
-            <Ionicons name="chatbubbles" size={16} color={colors.gray[600]} />
-            <Text style={styles.statText}>
-              {posts.length} posts
-            </Text>
-          </View>
-        </View>
-
-        {/* Tags */}
-        {community.tags && community.tags.length > 0 && (
-          <View style={styles.tagsContainer}>
-            {community.tags.map((tag, index) => (
-              <View key={index} style={styles.tag}>
-                <Text style={styles.tagText}>{tag}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Action buttons - improved layout */}
-        <View style={styles.actionButtonsContainer}>
-          {/* Top row - primary action button */}
-          <TouchableOpacity
-            style={[
-              styles.joinButton,
-              isJoined ? styles.joinedButton : styles.notJoinedButton
-            ]}
-            onPress={handleJoinToggle}
-            disabled={membershipLoading}
-            activeOpacity={0.8}
-          >
-            {membershipLoading ? (
-              <ActivityIndicator size="small" color={isJoined ? colors.white : colors.primary[500]} />
-            ) : (
-              <>
-                <Ionicons
-                  name={isJoined ? "checkmark-circle" : "add-circle-outline"}
-                  size={20}
-                  color={isJoined ? colors.white : colors.primary[500]}
-                  style={styles.buttonIcon}
-                />
-                <Text
-                  style={[
-                    styles.joinButtonText,
-                    isJoined ? styles.joinedButtonText : styles.notJoinedButtonText
-                  ]}
-                >
-                  {isJoined ? 'Joined' : 'Join Community'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-      {/* Second row - member actions */}
-      {isJoined && (
-        <View style={styles.secondaryButtonsRow}>
-          <TouchableOpacity
-            style={styles.createPostButton}
-            onPress={handleCreatePost}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add" size={18} color={colors.white} style={styles.buttonIcon} />
-            <Text style={styles.createPostButtonText}>Create Post</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.chatButton}
-            onPress={handleOpenChat}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="chatbubble" size={18} color={colors.white} style={styles.buttonIcon} />
-            <Text style={styles.chatButtonText}>Chat</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Third row - opportunities (full width for better visibility) */}
-      {isJoined && (
-        <TouchableOpacity
-          style={styles.opportunitiesButton}
-          onPress={handleBrowseOpportunities}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="briefcase" size={18} color={colors.primary[500]} style={styles.buttonIcon} />
-          <Text style={styles.opportunitiesButtonText}>
-            {hasOpportunities ? 'Browse Opportunities' : 'No Opportunities Available'}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-          {/* Owner-only button */}
-          {isOwner && userProfile?.role === 'organization' && (
-            <TouchableOpacity
-              style={styles.requestsButton}
-              onPress={handleViewRequests}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="mail" size={18} color={colors.primary[500]} style={styles.buttonIcon} />
-              <Text style={styles.requestsButtonText}>View Requests</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    );
+  const formatMemberCount = (count) => {
+    if (count >= 1000) return `${Math.floor(count / 1000)}k+`;
+    return count?.toString() || '0';
   };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <ActivityIndicator size="large" color="#1c1f4a" />
         <Text style={styles.loadingText}>Loading community...</Text>
       </View>
     );
@@ -442,292 +219,828 @@ const CommunityDetailScreen = ({ navigation, route, user, userProfile }) => {
   if (!community) {
     return (
       <View style={styles.errorContainer}>
-        <Ionicons name="alert-circle-outline" size={64} color={colors.error[500]} />
+        <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
         <Text style={styles.errorTitle}>Community Not Found</Text>
-        <Text style={styles.errorSubtitle}>This community may have been deleted or is private.</Text>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>Go Back</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <FlatList
-        data={posts}
-        renderItem={renderPost}
-        keyExtractor={item => item.id}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={renderEmptyState}
-        contentContainerStyle={posts.length === 0 ? styles.emptyListContainer : styles.listContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+    return (
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Fixed Top Navigation */}
+      <SafeAreaView edges={['top']} style={styles.navSafeArea}>
+        <View style={styles.nav}>
+          <TouchableOpacity
+            style={styles.navButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={24} color="#1e293b" />
+          </TouchableOpacity>
+          
+          <Animated.Text style={[styles.navTitle, { opacity: navTitleOpacity }]}>
+            {community.name}
+          </Animated.Text>
+          
+          <TouchableOpacity style={styles.navButton}>
+            <Ionicons name="ellipsis-horizontal" size={24} color="#1e293b" />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+
+      {/* Main Content */}
+      <Animated.ScrollView
+        style={styles.mainContent}
         showsVerticalScrollIndicator={false}
-      />
-    </SafeAreaView>
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          {/* Cover Image */}
+          <ImageBackground
+            source={{ uri: community.coverImageUrl || 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=800' }}
+            style={styles.coverImage}
+          >
+            <View style={styles.coverGradient} />
+          </ImageBackground>
+
+          {/* Avatar & Action */}
+          <View style={styles.avatarActionRow}>
+            <View style={styles.avatarContainer}>
+              <Image
+                source={{ uri: community.imageUrl || 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=200' }}
+                style={styles.avatar}
+              />
+      </View>
+            
+            <TouchableOpacity 
+              style={styles.joinButton}
+              onPress={handleJoinToggle}
+              disabled={membershipLoading}
+            >
+              {membershipLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name={isJoined ? "checkmark" : "add"} size={18} color="#fff" />
+                  <Text style={styles.joinButtonText}>{isJoined ? 'Joined' : 'Join'}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Profile Info */}
+        <View style={styles.profileInfo}>
+          <View style={styles.titleRow}>
+            <Text style={styles.communityTitle}>{community.name}</Text>
+            {community.verified && (
+              <Ionicons name="checkmark-circle" size={20} color="#3b82f6" />
+            )}
+          </View>
+          
+          <View style={styles.locationRow}>
+            <Ionicons name="location" size={16} color="#64748b" />
+            <Text style={styles.locationText}>{community.location || 'San Francisco, CA'}</Text>
+          </View>
+          
+          <Text style={styles.description}>
+            {community.description || 'Dedicated to making our community a better place. Join us! 🌱'}
+            </Text>
+
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{formatMemberCount(community.memberCount)}</Text>
+              <Text style={styles.statLabel}>Members</Text>
+          </View>
+            
+            <View style={styles.statDivider} />
+            
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{opportunities.length || 12}</Text>
+              <Text style={styles.statLabel}>Events</Text>
+        </View>
+
+            <View style={styles.statDivider} />
+            
+            <View style={styles.memberAvatars}>
+              <Image
+                source={{ uri: 'https://randomuser.me/api/portraits/women/1.jpg' }}
+                style={styles.memberAvatar}
+              />
+              <Image
+                source={{ uri: 'https://randomuser.me/api/portraits/men/1.jpg' }}
+                style={[styles.memberAvatar, styles.memberAvatarOverlap]}
+              />
+              <Image
+                source={{ uri: 'https://randomuser.me/api/portraits/women/2.jpg' }}
+                style={[styles.memberAvatar, styles.memberAvatarOverlap]}
+              />
+              <View style={[styles.memberAvatar, styles.memberAvatarOverlap, styles.memberAvatarMore]}>
+                <Text style={styles.memberAvatarMoreText}>+1k</Text>
+              </View>
+          </View>
+          </View>
+        </View>
+
+        {/* Sticky Tabs */}
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => setActiveTab('feed')}
+          >
+            <Text style={[styles.tabText, activeTab === 'feed' && styles.tabTextActive]}>
+              Feed
+                </Text>
+            {activeTab === 'feed' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => setActiveTab('opportunities')}
+          >
+            <Text style={[styles.tabText, activeTab === 'opportunities' && styles.tabTextActive]}>
+              Opportunities
+            </Text>
+            {activeTab === 'opportunities' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+
+        <TouchableOpacity
+            style={styles.tab}
+            onPress={() => setActiveTab('members')}
+        >
+            <Text style={[styles.tabText, activeTab === 'members' && styles.tabTextActive]}>
+              Members
+          </Text>
+            {activeTab === 'members' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+        </View>
+
+        {/* Content Area */}
+        <View style={styles.contentArea}>
+          {/* Composer */}
+          {isJoined && (
+            <TouchableOpacity style={styles.composerCard} onPress={handleCreatePost}>
+              <Image
+                source={{ uri: user?.photoURL || userProfile?.photoURL || 'https://randomuser.me/api/portraits/women/44.jpg' }}
+                style={styles.composerAvatar}
+              />
+              <View style={styles.composerContent}>
+                <TextInput
+                  style={styles.composerInput}
+                  placeholder="Share something with the community..."
+                  placeholderTextColor="#94a3b8"
+                  editable={false}
+                />
+                <View style={styles.composerActions}>
+                  <View style={styles.composerIcons}>
+                    <TouchableOpacity style={styles.composerIconButton}>
+                      <Ionicons name="image-outline" size={20} color="#94a3b8" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.composerIconButton}>
+                      <Ionicons name="calendar-outline" size={20} color="#94a3b8" />
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity style={styles.postButton} onPress={handleCreatePost}>
+                    <Text style={styles.postButtonText}>Post</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+        </TouchableOpacity>
+      )}
+
+          {/* Active Opportunities */}
+          <View style={styles.opportunitiesSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Active Opportunities</Text>
+              <TouchableOpacity>
+                <Text style={styles.viewAllText}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.opportunitiesScroll}
+            >
+              {/* Opportunity Card 1 */}
+              <TouchableOpacity style={styles.opportunityCard}>
+                <ImageBackground
+                  source={{ uri: 'https://images.unsplash.com/photo-1617817547657-e89eabdef042?w=600' }}
+                  style={styles.opportunityImage}
+                >
+                  <View style={styles.opportunityImageOverlay} />
+                </ImageBackground>
+                <View style={styles.opportunityContent}>
+                  <Text style={styles.opportunityDate}>THIS SATURDAY</Text>
+                  <Text style={styles.opportunityTitle} numberOfLines={1}>Ocean Beach Cleanup</Text>
+                  <View style={styles.opportunityTimeRow}>
+                    <Ionicons name="time-outline" size={14} color="#64748b" />
+                    <Text style={styles.opportunityTime}>9:00 AM - 12:00 PM</Text>
+                  </View>
+                  <TouchableOpacity style={styles.detailsButton}>
+                    <Text style={styles.detailsButtonText}>Details</Text>
+            </TouchableOpacity>
+        </View>
+              </TouchableOpacity>
+
+              {/* Opportunity Card 2 */}
+              <TouchableOpacity style={styles.opportunityCard}>
+                <ImageBackground
+                  source={{ uri: 'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=600' }}
+                  style={styles.opportunityImage}
+                >
+                  <View style={styles.opportunityImageOverlay} />
+                </ImageBackground>
+                <View style={styles.opportunityContent}>
+                  <Text style={styles.opportunityDate}>NEXT WEEK</Text>
+                  <Text style={styles.opportunityTitle} numberOfLines={1}>Community Garden Plant...</Text>
+                  <View style={styles.opportunityTimeRow}>
+                    <Ionicons name="time-outline" size={14} color="#64748b" />
+                    <Text style={styles.opportunityTime}>10:00 AM - 2:00 PM</Text>
+      </View>
+                  <TouchableOpacity style={styles.detailsButton}>
+                    <Text style={styles.detailsButtonText}>Details</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+
+          {/* Community Feed */}
+          <View style={styles.feedSection}>
+            <Text style={styles.sectionTitle}>Community Feed</Text>
+            
+            {posts.length === 0 ? (
+              <View style={styles.emptyFeed}>
+                <Ionicons name="chatbubbles-outline" size={48} color="#94a3b8" />
+                <Text style={styles.emptyFeedTitle}>No posts yet</Text>
+                <Text style={styles.emptyFeedText}>Be the first to share something!</Text>
+      </View>
+            ) : (
+              posts.map((post) => (
+                <View key={post.id} style={styles.postCard}>
+                  {/* Post Header */}
+                  <View style={styles.postHeader}>
+                    <View style={styles.postAuthorRow}>
+                      <Image
+                        source={{ uri: post.authorPhotoURL || 'https://randomuser.me/api/portraits/women/44.jpg' }}
+                        style={styles.postAuthorAvatar}
+                      />
+                      <View>
+                        <View style={styles.postAuthorNameRow}>
+                          <Text style={styles.postAuthorName}>{post.authorName || community.name}</Text>
+                          {post.isOrganization && (
+                            <Ionicons name="checkmark-circle" size={14} color="#3b82f6" />
+                          )}
+                        </View>
+                        <Text style={styles.postTime}>
+                          {post.createdAt?.toDate ? new Date(post.createdAt.toDate()).toLocaleDateString() : '2 hours ago'}
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity>
+                      <Ionicons name="ellipsis-horizontal" size={20} color="#94a3b8" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Post Content */}
+                  <Text style={styles.postContent}>{post.content}</Text>
+
+                  {/* Post Image */}
+                  {post.imageUrl && (
+                    <Image source={{ uri: post.imageUrl }} style={styles.postImage} />
+                  )}
+
+                  {/* Interactions */}
+                  <View style={styles.postInteractions}>
+                    <View style={styles.postInteractionsLeft}>
+        <TouchableOpacity
+                        style={styles.interactionButton}
+                        onPress={() => handleReactionPress(post.id, 'like')}
+                      >
+                        <Ionicons 
+                          name={userReactions[post.id]?.like ? "heart" : "heart-outline"} 
+                          size={20} 
+                          color={userReactions[post.id]?.like ? "#ef4444" : "#64748b"} 
+                        />
+                        <Text style={styles.interactionCount}>{post.reactions?.like || 0}</Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={styles.interactionButton}
+                        onPress={() => navigation.navigate('Comments', {
+                          postId: post.id,
+                          postTitle: community?.name || 'Community Post',
+                          postContent: post.content,
+                          postImage: post.imageUrl
+                        })}
+                      >
+                        <Ionicons name="chatbubble-outline" size={20} color="#64748b" />
+                        <Text style={styles.interactionCount}>{post.commentCount || 0}</Text>
+        </TouchableOpacity>
+      </View>
+                    
+                    <TouchableOpacity>
+                      <Ionicons name="share-outline" size={20} color="#94a3b8" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        </View>
+
+        {/* Bottom padding */}
+        <View style={{ height: 80 }} />
+      </Animated.ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f6f6f8',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: '#f6f6f8',
   },
   loadingText: {
     fontSize: 16,
-    color: colors.text.secondary,
-    marginTop: spacing.sm,
+    color: '#64748b',
+    marginTop: 12,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.background,
+    backgroundColor: '#f6f6f8',
+    paddingHorizontal: 24,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: colors.text.primary,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  errorSubtitle: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
+    color: '#0f172a',
+    marginTop: 16,
+    marginBottom: 24,
   },
   backButton: {
-    backgroundColor: colors.primary[500],
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    backgroundColor: '#1c1f4a',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     borderRadius: 8,
   },
   backButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.white,
+    color: '#fff',
   },
-  headerContainer: {
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+  navSafeArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
   },
-  communityName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  communityDescription: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    lineHeight: 24,
-    marginBottom: spacing.md,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    marginBottom: spacing.md,
-  },
-  stat: {
+  nav: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: spacing.lg,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    height: 56,
   },
-  statText: {
+  navButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTitle: {
     fontSize: 14,
-    color: colors.text.secondary,
-    marginLeft: 4,
-    fontWeight: '500',
+    fontWeight: '700',
+    color: '#1e293b',
   },
-  tagsContainer: {
+  mainContent: {
+    flex: 1,
+    marginTop: 100,
+  },
+  heroSection: {
+    position: 'relative',
+  },
+  coverImage: {
+    width: '100%',
+    height: 192,
+  },
+  coverGradient: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  avatarActionRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: spacing.md,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: 20,
+    marginTop: -40,
+    marginBottom: 12,
   },
-  tag: {
-    backgroundColor: colors.primary[100],
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginRight: spacing.xs,
-    marginBottom: 4,
+  avatarContainer: {
+    position: 'relative',
   },
-  tagText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary[700],
-  },
-  actionButtonsContainer: {
-    gap: spacing.md,
-    marginTop: spacing.sm,
-  },
-  secondaryButtonsRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.sm,
+  avatar: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 4,
+    borderColor: '#f6f6f8',
+    backgroundColor: '#fff',
   },
   joinButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    borderRadius: 16,
-    borderWidth: 2,
-    minHeight: 56,
-    width: '100%',
-  },
-  notJoinedButton: {
-    backgroundColor: colors.white,
-    borderColor: colors.primary[500],
-  },
-  joinedButton: {
-    backgroundColor: colors.success[500],
-    borderColor: colors.success[500],
-  },
-  buttonIcon: {
-    marginRight: spacing.sm,
+    gap: 8,
+    height: 40,
+    paddingHorizontal: 24,
+    backgroundColor: '#1c1f4a',
+    borderRadius: 20,
+    shadowColor: '#1c1f4a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 4,
   },
   joinButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  profileInfo: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  communityTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0f172a',
+    lineHeight: 28,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 12,
+  },
+  locationText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  description: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#475569',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+    marginTop: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  statItem: {
+    flexDirection: 'column',
+  },
+  statValue: {
     fontSize: 18,
     fontWeight: '700',
-    textAlign: 'center',
-    letterSpacing: 0.5,
+    color: '#0f172a',
   },
-  notJoinedButtonText: {
-    color: colors.primary[500],
+  statLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748b',
   },
-  joinedButtonText: {
-    color: colors.white,
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#e2e8f0',
   },
-  createPostButton: {
+  memberAvatars: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  memberAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  memberAvatarOverlap: {
+    marginLeft: -8,
+  },
+  memberAvatarMore: {
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 14,
-    backgroundColor: colors.primary[500],
+  },
+  memberAvatarMoreText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    paddingHorizontal: 20,
+    gap: 32,
+    backgroundColor: '#f6f6f8',
+  },
+  tab: {
+    position: 'relative',
+    paddingBottom: 12,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  tabTextActive: {
+    fontWeight: '700',
+    color: '#1c1f4a',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#1c1f4a',
+    borderTopLeftRadius: 999,
+    borderTopRightRadius: 999,
+  },
+  contentArea: {
+    padding: 20,
+    gap: 24,
+  },
+  composerCard: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  composerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e5e7eb',
+  },
+  composerContent: {
     flex: 1,
-    minHeight: 48,
   },
-  createPostButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.white,
-    textAlign: 'center',
-    letterSpacing: 0.3,
+  composerInput: {
+    fontSize: 14,
+    color: '#1e293b',
+    height: 40,
+    padding: 0,
   },
-  chatButton: {
+  composerActions: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 14,
-    backgroundColor: colors.accent[500],
-    flex: 1,
-    minHeight: 48,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderStyle: 'dashed',
+    borderTopColor: '#e2e8f0',
   },
-  chatButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.white,
-    textAlign: 'center',
-    letterSpacing: 0.3,
-  },
-  requestsButton: {
+  composerIcons: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 14,
-    backgroundColor: colors.white,
-    borderWidth: 1.5,
-    borderColor: colors.primary[500],
-    minHeight: 48,
-    width: '100%',
-    marginTop: spacing.sm,
+    gap: 16,
   },
-  requestsButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.primary[500],
-    textAlign: 'center',
-    letterSpacing: 0.3,
-  },
-  opportunitiesButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 14,
-    backgroundColor: colors.white,
-    borderWidth: 1.5,
-    borderColor: colors.primary[500],
-    width: '100%',
-    minHeight: 48,
-    marginTop: spacing.sm,
-  },
-  opportunitiesButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.primary[500],
-    textAlign: 'center',
-    letterSpacing: 0.2,
-    flexShrink: 1,
-  },
-  listContainer: {
-    paddingBottom: spacing.lg,
-  },
-  emptyListContainer: {
-    flexGrow: 1,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
-  createFirstPostButton: {
-    backgroundColor: colors.primary[500],
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+  composerIconButton: {},
+  postButton: {
+    backgroundColor: 'rgba(28, 31, 74, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
   },
-  createFirstPostButtonText: {
+  postButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1c1f4a',
+  },
+  opportunitiesSection: {
+    gap: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    paddingHorizontal: 4,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1c1f4a',
+  },
+  opportunitiesScroll: {
+    gap: 16,
+    paddingBottom: 8,
+  },
+  opportunityCard: {
+    width: 260,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  opportunityImage: {
+    height: 128,
+    backgroundColor: '#e5e7eb',
+  },
+  opportunityImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  opportunityContent: {
+    padding: 16,
+  },
+  opportunityDate: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#16a34a',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  opportunityTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  opportunityTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 16,
+  },
+  opportunityTime: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  detailsButton: {
+    width: '100%',
+    paddingVertical: 8,
+    backgroundColor: '#f6f6f8',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  detailsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  feedSection: {
+    gap: 16,
+  },
+  emptyFeed: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  emptyFeedTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.white,
+    color: '#0f172a',
+  },
+  emptyFeedText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  postCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  postHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  postAuthorRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  postAuthorAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#e5e7eb',
+  },
+  postAuthorNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  postAuthorName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  postTime: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  postContent: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#1e293b',
+    marginBottom: 12,
+  },
+  postImage: {
+    width: '100%',
+    height: 224,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    marginBottom: 16,
+  },
+  postInteractions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  postInteractionsLeft: {
+    flexDirection: 'row',
+    gap: 24,
+  },
+  interactionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  interactionCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
   },
 });
 

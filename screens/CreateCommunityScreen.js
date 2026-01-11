@@ -1,3 +1,4 @@
+// Create Community Screen - Direct conversion from Figma Make HTML
 import React, { useState } from 'react';
 import {
   View,
@@ -9,58 +10,38 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
-  ActivityIndicator
+  StatusBar,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../styles/colors';
-import { spacing } from '../styles/spacing';
-// Temporarily using mock service for development
-import { createCommunity } from '../services/mockFirestore';
-import SkillSelector from '../components/SkillSelector';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import Ionicons from '../components/LazyIonicons';
+import { createCommunity } from '../services/firestore';
 
-// Predefined community tags
-const AVAILABLE_COMMUNITY_TAGS = [
-  'environment',
-  'education',
-  'health',
-  'children',
-  'elderly',
-  'animals',
-  'homelessness',
-  'hunger',
-  'technology',
-  'arts',
-  'culture',
-  'sports',
-  'community',
-  'safety',
-  'disaster_relief',
-  'sustainability',
-  'mental_health',
-  'accessibility',
-  'veterans',
-  'refugees',
-  'literacy',
-  'mentorship',
-  'fundraising',
-  'advocacy',
-  'social_justice'
-];
-
-/**
- * Create Community Screen
- * Allows organizations to create new communities
- */
 const CreateCommunityScreen = ({ navigation, user, userProfile }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     isPublic: true
   });
-  const [selectedTags, setSelectedTags] = useState([]);
+  const [coverImage, setCoverImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setCoverImage(result.assets[0].uri);
+    }
+  };
 
   const validateForm = () => {
     const newErrors = {};
@@ -68,21 +49,13 @@ const CreateCommunityScreen = ({ navigation, user, userProfile }) => {
     if (!formData.name.trim()) {
       newErrors.name = 'Community name is required';
     } else if (formData.name.trim().length < 3) {
-      newErrors.name = 'Community name must be at least 3 characters';
-    } else if (formData.name.trim().length > 50) {
-      newErrors.name = 'Community name must be less than 50 characters';
+      newErrors.name = 'Name must be at least 3 characters';
     }
 
     if (!formData.description.trim()) {
       newErrors.description = 'Description is required';
     } else if (formData.description.trim().length < 10) {
       newErrors.description = 'Description must be at least 10 characters';
-    } else if (formData.description.trim().length > 500) {
-      newErrors.description = 'Description must be less than 500 characters';
-    }
-
-    if (selectedTags.length > 5) {
-      newErrors.tags = 'Maximum 5 tags allowed';
     }
 
     setErrors(newErrors);
@@ -91,26 +64,8 @@ const CreateCommunityScreen = ({ navigation, user, userProfile }) => {
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: null }));
-    }
-  };
-
-  const toggleTag = (tag) => {
-    const updatedTags = selectedTags.includes(tag)
-      ? selectedTags.filter(t => t !== tag)
-      : [...selectedTags, tag];
-    
-    if (updatedTags.length > 5) {
-      Alert.alert('Maximum Tags', 'You can select a maximum of 5 tags.');
-      return;
-    }
-    
-    setSelectedTags(updatedTags);
-    // Clear error when user makes changes
-    if (errors.tags) {
-      setErrors(prev => ({ ...prev, tags: null }));
     }
   };
 
@@ -131,8 +86,9 @@ const CreateCommunityScreen = ({ navigation, user, userProfile }) => {
       const communityData = {
         name: formData.name.trim(),
         description: formData.description.trim(),
-        tags: selectedTags,
-        isPublic: formData.isPublic
+        tags: [],
+        isPublic: formData.isPublic,
+        coverImageUrl: coverImage || null,
       };
 
       const communityId = await createCommunity(user.uid, communityData);
@@ -160,390 +116,414 @@ const CreateCommunityScreen = ({ navigation, user, userProfile }) => {
     }
   };
 
-  const renderInputField = (
-    label,
-    field,
-    placeholder,
-    multiline = false,
-    maxLength = null
-  ) => (
-    <View style={styles.inputContainer}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <TextInput
-        style={[
-          styles.input,
-          multiline && styles.multilineInput,
-          errors[field] && styles.inputError
-        ]}
-        placeholder={placeholder}
-        placeholderTextColor={colors.gray[500]}
-        value={formData[field]}
-        onChangeText={(value) => handleInputChange(field, value)}
-        multiline={multiline}
-        maxLength={maxLength}
-        textAlignVertical={multiline ? 'top' : 'center'}
-      />
-      {maxLength && (
-        <Text style={styles.characterCount}>
-          {formData[field].length}/{maxLength}
-        </Text>
-      )}
-      {errors[field] && (
-        <Text style={styles.errorText}>{errors[field]}</Text>
-      )}
-    </View>
-  );
-
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
         {/* Header */}
+      <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
         <View style={styles.header}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={styles.cancelButton}
             onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+            <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
+          
           <Text style={styles.headerTitle}>Create Community</Text>
-          <View style={styles.headerPlaceholder} />
+          
+          <View style={styles.headerSpacer} />
         </View>
+      </SafeAreaView>
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         <ScrollView
-          style={styles.scrollView}
+          style={styles.mainContent}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Community Icon */}
-          <View style={styles.iconContainer}>
-            <View style={styles.communityIcon}>
-              <Ionicons name="people" size={40} color={colors.primary[500]} />
+          {/* Image Uploader */}
+          <View style={styles.imageUploaderSection}>
+            <TouchableOpacity 
+              style={styles.imageUploader}
+              onPress={pickImage}
+              activeOpacity={0.8}
+            >
+              {coverImage ? (
+                <Image source={{ uri: coverImage }} style={styles.coverImagePreview} />
+              ) : (
+                <LinearGradient
+                  colors={['rgba(28, 31, 74, 0.05)', 'rgba(28, 31, 74, 0.1)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.imageUploaderGradient}
+                >
+                  <View style={styles.imageUploaderContent}>
+                    <View style={styles.cameraIconContainer}>
+                      <Ionicons name="camera" size={24} color="#1c1f4a" />
+                    </View>
+                    <Text style={styles.imageUploaderTitle}>Tap to upload cover image</Text>
+                    <Text style={styles.imageUploaderSubtitle}>Supports JPG, PNG (Max 5MB)</Text>
             </View>
-            <Text style={styles.iconSubtitle}>
-              Create a space for your cause community
-            </Text>
+                </LinearGradient>
+              )}
+            </TouchableOpacity>
           </View>
 
           {/* Form Fields */}
-          {renderInputField(
-            'Community Name *',
-            'name',
-            'Enter community name',
-            false,
-            50
-          )}
+          <View style={styles.formSection}>
+            {/* Community Name */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Community Name</Text>
+              <TextInput
+                style={[styles.input, errors.name && styles.inputError]}
+                placeholder="e.g. Downtown Clean-Up Crew"
+                placeholderTextColor="#94a3b8"
+                value={formData.name}
+                onChangeText={(value) => handleInputChange('name', value)}
+              />
+              {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
+            </View>
 
-          {renderInputField(
-            'Description *',
-            'description',
-            'Describe what this community is about and its purpose...',
-            true,
-            500
-          )}
-
-          {/* Tags Section with SkillSelector */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Community Tags</Text>
-            <Text style={styles.tagSubtitle}>
-              Select up to 5 tags that describe your community's focus
-            </Text>
-            <SkillSelector
-              skills={AVAILABLE_COMMUNITY_TAGS}
-              selectedSkills={selectedTags}
-              onToggle={toggleTag}
-              disabled={false}
-              placeholder="Search community tags..."
-              maxDisplayed={8}
-              showSearch={true}
+            {/* Description */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Description</Text>
+              <TextInput
+                style={[styles.input, styles.textArea, errors.description && styles.inputError]}
+                placeholder="What is this community about? Share your mission and goals..."
+                placeholderTextColor="#94a3b8"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                value={formData.description}
+                onChangeText={(value) => handleInputChange('description', value)}
             />
-            {errors.tags && (
-              <Text style={styles.errorText}>{errors.tags}</Text>
-            )}
+              {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
           </View>
 
-          {/* Privacy Setting */}
-          <View style={styles.privacyContainer}>
-            <Text style={styles.privacyLabel}>Community Privacy</Text>
+            {/* Privacy Settings */}
+            <View style={styles.privacySection}>
+              <Text style={styles.privacySectionTitle}>Privacy Settings</Text>
+              
             <View style={styles.privacyOptions}>
+                {/* Public Option */}
               <TouchableOpacity
                 style={[
                   styles.privacyOption,
-                  formData.isPublic && styles.selectedPrivacyOption
+                    formData.isPublic && styles.privacyOptionSelected
                 ]}
                 onPress={() => handleInputChange('isPublic', true)}
-                activeOpacity={0.7}
+                  activeOpacity={0.8}
               >
-                <Ionicons
-                  name="globe-outline"
-                  size={20}
-                  color={formData.isPublic ? colors.primary[500] : colors.gray[500]}
-                />
-                <View style={styles.privacyOptionText}>
-                  <Text style={[
-                    styles.privacyOptionTitle,
-                    formData.isPublic && styles.selectedPrivacyOptionTitle
-                  ]}>
-                    Public
-                  </Text>
+                  <View style={[styles.privacyIconContainer, styles.publicIconBg]}>
+                    <Ionicons name="globe-outline" size={24} color="#1c1f4a" />
+                  </View>
+                  <View style={styles.privacyOptionContent}>
+                    <View style={styles.privacyOptionHeader}>
+                      <Text style={styles.privacyOptionTitle}>Public</Text>
+                      <View style={[
+                        styles.radioButton,
+                        formData.isPublic && styles.radioButtonSelected
+                      ]}>
+                        {formData.isPublic && (
+                          <Ionicons name="checkmark" size={14} color="#fff" />
+                        )}
+                      </View>
+                    </View>
                   <Text style={styles.privacyOptionDescription}>
-                    Anyone can find and join this community
+                      Anyone can search for and join this community. Visible on your profile.
                   </Text>
                 </View>
               </TouchableOpacity>
 
+                {/* Private Option */}
               <TouchableOpacity
                 style={[
                   styles.privacyOption,
-                  !formData.isPublic && styles.selectedPrivacyOption
+                    !formData.isPublic && styles.privacyOptionSelected
                 ]}
                 onPress={() => handleInputChange('isPublic', false)}
-                activeOpacity={0.7}
+                  activeOpacity={0.8}
               >
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color={!formData.isPublic ? colors.primary[500] : colors.gray[500]}
-                />
-                <View style={styles.privacyOptionText}>
-                  <Text style={[
-                    styles.privacyOptionTitle,
-                    !formData.isPublic && styles.selectedPrivacyOptionTitle
-                  ]}>
-                    Private
-                  </Text>
+                  <View style={[styles.privacyIconContainer, styles.privateIconBg]}>
+                    <Ionicons name="lock-closed" size={24} color="#9333ea" />
+                  </View>
+                  <View style={styles.privacyOptionContent}>
+                    <View style={styles.privacyOptionHeader}>
+                      <Text style={styles.privacyOptionTitle}>Private</Text>
+                      <View style={[
+                        styles.radioButton,
+                        !formData.isPublic && styles.radioButtonSelected
+                      ]}>
+                        {!formData.isPublic && (
+                          <Ionicons name="checkmark" size={14} color="#fff" />
+                        )}
+                      </View>
+                    </View>
                   <Text style={styles.privacyOptionDescription}>
-                    Only invited users can join this community
+                      Only people with an invite link can join. Hidden from search results.
                   </Text>
                 </View>
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* Guidelines */}
-          <View style={styles.guidelinesContainer}>
-            <Text style={styles.guidelinesTitle}>Community Guidelines</Text>
-            <Text style={styles.guidelinesText}>
-              • Be respectful and inclusive{'\n'}
-              • Stay on topic and relevant to your cause{'\n'}
-              • No spam or self-promotion{'\n'}
-              • Share resources and collaborate positively{'\n'}
-              • Follow platform terms of service
-            </Text>
           </View>
         </ScrollView>
+      </KeyboardAvoidingView>
 
-        {/* Submit Button */}
-        <View style={styles.submitContainer}>
+      {/* Sticky Footer */}
+      <SafeAreaView edges={['bottom']} style={styles.footerSafeArea}>
+        <View style={styles.footer}>
           <TouchableOpacity
-            style={[
-              styles.submitButton,
-              loading && styles.submitButtonDisabled
-            ]}
+            style={[styles.createButton, loading && styles.createButtonDisabled]}
             onPress={handleSubmit}
             disabled={loading}
-            activeOpacity={0.8}
+            activeOpacity={0.9}
           >
             {loading ? (
-              <ActivityIndicator size="small" color={colors.white} />
+              <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <>
-                <Ionicons name="add-circle" size={20} color={colors.white} />
-                <Text style={styles.submitButtonText}>Create Community</Text>
-              </>
+              <Text style={styles.createButtonText}>Create Community</Text>
             )}
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
     </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f6f6f8',
   },
-  keyboardAvoidingView: {
-    flex: 1,
+  headerSafeArea: {
+    backgroundColor: 'rgba(246, 246, 248, 0.8)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  backButton: {
-    padding: spacing.xs,
+  cancelButton: {
+    paddingHorizontal: 8,
+    marginLeft: -8,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#64748b',
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: colors.text.primary,
+    fontWeight: '700',
+    color: '#0f172a',
+    letterSpacing: -0.3,
   },
-  headerPlaceholder: {
-    width: 40,
+  headerSpacer: {
+    width: 50,
   },
-  scrollView: {
+  mainContent: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: spacing.xl,
+    paddingBottom: 120,
   },
-  iconContainer: {
+  imageUploaderSection: {
+    padding: 16,
+    paddingTop: 24,
+  },
+  imageUploader: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#d1d5db',
+  },
+  coverImagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  imageUploaderGradient: {
+    flex: 1,
+  },
+  imageUploaderContent: {
+    flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.surface,
-    marginBottom: spacing.md,
-  },
-  communityIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primary[100],
     justifyContent: 'center',
+    padding: 16,
+  },
+  cameraIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#fff',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 12,
   },
-  iconSubtitle: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    textAlign: 'center',
+  imageUploaderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
   },
-  inputContainer: {
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.md,
+  imageUploaderSubtitle: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  formSection: {
+    paddingHorizontal: 16,
+    gap: 24,
+  },
+  inputGroup: {
+    gap: 8,
   },
   inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
   },
   input: {
-    borderWidth: 1,
-    borderColor: colors.border.medium,
+    width: '100%',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderRadius: 8,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
     fontSize: 16,
-    color: colors.text.primary,
-    backgroundColor: colors.surface,
+    color: '#0f172a',
   },
-  multilineInput: {
-    height: 100,
-    textAlignVertical: 'top',
+  textArea: {
+    minHeight: 120,
+    paddingTop: 14,
   },
   inputError: {
-    borderColor: colors.error[500],
-  },
-  characterCount: {
-    fontSize: 12,
-    color: colors.gray[500],
-    textAlign: 'right',
-    marginTop: 4,
+    borderColor: '#ef4444',
   },
   errorText: {
+    fontSize: 12,
+    color: '#ef4444',
+  },
+  privacySection: {
+    gap: 12,
+    paddingTop: 8,
+  },
+  privacySectionTitle: {
     fontSize: 14,
-    color: colors.error[500],
-    marginTop: 4,
-  },
-  tagSubtitle: {
-    fontSize: 14,
-    color: colors.text.secondary,
-    marginBottom: spacing.sm,
-  },
-  privacyContainer: {
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  privacyLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing.sm,
+    fontWeight: '700',
+    color: '#0f172a',
   },
   privacyOptions: {
-    gap: spacing.sm,
+    gap: 12,
   },
   privacyOption: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
+    alignItems: 'flex-start',
+    padding: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border.medium,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
   },
-  selectedPrivacyOption: {
-    borderColor: colors.primary[500],
-    backgroundColor: colors.primary[50],
+  privacyOptionSelected: {
+    borderWidth: 2,
+    borderColor: '#1c1f4a',
   },
-  privacyOptionText: {
+  privacyIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  publicIconBg: {
+    backgroundColor: '#eff6ff',
+  },
+  privateIconBg: {
+    backgroundColor: '#faf5ff',
+  },
+  privacyOptionContent: {
     flex: 1,
-    marginLeft: spacing.sm,
+  },
+  privacyOptionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   privacyOptionTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: 2,
+    fontWeight: '700',
+    color: '#0f172a',
   },
-  selectedPrivacyOptionTitle: {
-    color: colors.primary[700],
-  },
-  privacyOptionDescription: {
-    fontSize: 14,
-    color: colors.text.secondary,
-  },
-  guidelinesContainer: {
-    marginBottom: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  guidelinesTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.primary,
-    marginBottom: spacing.sm,
-  },
-  guidelinesText: {
-    fontSize: 14,
-    color: colors.text.secondary,
-    lineHeight: 20,
-    backgroundColor: colors.gray[50],
-    padding: spacing.md,
-    borderRadius: 8,
-  },
-  submitContainer: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
-  },
-  submitButton: {
-    flexDirection: 'row',
+  radioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary[500],
-    paddingVertical: spacing.md,
+  },
+  radioButtonSelected: {
+    backgroundColor: '#1c1f4a',
+    borderColor: '#1c1f4a',
+  },
+  privacyOptionDescription: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#64748b',
+  },
+  footerSafeArea: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(246, 246, 248, 0.9)',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  footer: {
+    padding: 16,
+  },
+  createButton: {
+    width: '100%',
+    paddingVertical: 16,
+    backgroundColor: '#1c1f4a',
     borderRadius: 8,
-    gap: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1c1f4a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  submitButtonDisabled: {
-    backgroundColor: colors.gray[400],
+  createButtonDisabled: {
+    opacity: 0.6,
   },
-  submitButtonText: {
+  createButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
 

@@ -1,5 +1,11 @@
-import { registerRootComponent } from 'expo';
+import 'react-native-gesture-handler';
 
+// Polyfill for Firebase compatibility
+if (typeof global.self === 'undefined') {
+  global.self = global;
+}
+
+import { registerRootComponent } from 'expo';
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);

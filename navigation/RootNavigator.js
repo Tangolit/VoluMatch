@@ -1,209 +1,247 @@
 // Root navigator that handles role-based navigation
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { Ionicons } from '@expo/vector-icons';
-import { auth } from '../services/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import Ionicons from '../components/LazyIonicons';
 import { colors } from '../styles/colors';
-// Import both real and mock services
-import { fetchUserProfile, clearUserProfile } from '../services/mockFirestore';
-import { getUserProfile, createUserProfile } from '../services/firestore';
+import { mockUserProfile } from '../data/mockData';
 
 // Import screens
-import AuthScreenSimple from '../screens/AuthScreenSimple';
-import LoginScreen from '../screens/LoginScreen';
-import SignupScreen from '../screens/SignupScreen';
-import SwipeScreenSimple from '../screens/SwipeScreenSimple';
-import MyOpportunitiesScreen from '../screens/MyOpportunitiesScreen';
+import SwipeScreen from '../screens/SwipeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ImpactScreen from '../screens/ImpactScreen';
+import MyOpportunitiesScreen from '../screens/MyOpportunitiesScreen';
 import AddOpportunityScreen from '../screens/AddOpportunityScreen';
 import OrganizationProfileScreen from '../screens/OrganizationProfileScreen';
+import LoginScreen from '../screens/LoginScreen';
+import SignupScreen from '../screens/SignupScreen';
 import RoleSelectionScreen from '../screens/RoleSelectionScreen';
+
+// Import Onboarding screens
+import OnboardingScreen1 from '../screens/OnboardingScreen1';
+import OnboardingScreen2 from '../screens/OnboardingScreen2';
+import OnboardingScreen3 from '../screens/OnboardingScreen3';
+
+// Import Communities screens
 import CommunitiesListScreen from '../screens/CommunitiesListScreen';
 import CommunityDetailScreen from '../screens/CommunityDetailScreen';
 import CreateCommunityScreen from '../screens/CreateCommunityScreen';
+// Chat disabled from community flow
+// import CommunityChatScreen from '../screens/CommunityChatScreen';
+import CommunityOpportunitiesScreen from '../screens/CommunityOpportunitiesScreen';
+import CommunitySwipeScreen from '../screens/CommunitySwipeScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import CommentsScreen from '../screens/CommentsScreen';
 import CommunityRequestsScreen from '../screens/CommunityRequestsScreen';
-import CommunitySwipeScreen from '../screens/CommunitySwipeScreen';
-import CommunityOpportunitiesScreen from '../screens/CommunityOpportunitiesScreen';
-import CommunityChatScreen from '../screens/CommunityChatScreen';
-
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
-const AuthStack = createStackNavigator();
 
-// Authentication Stack Navigator
-const AuthStackNavigator = () => {
-  return (
-    <AuthStack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <AuthStack.Screen name="Login" component={LoginScreen} />
-      <AuthStack.Screen name="Signup" component={SignupScreen} />
-    </AuthStack.Navigator>
-  );
-};
-
-// Community Stack Navigator
-const CommunityStackNavigator = ({ user, userProfile }) => {
-  // Memoize render functions to prevent recreation on every render
-  const renderCommunitiesListScreen = useCallback((props) => (
-    <CommunitiesListScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderCommunityDetailScreen = useCallback((props) => (
-    <CommunityDetailScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderCreateCommunityScreen = useCallback((props) => (
-    <CreateCommunityScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderCreatePostScreen = useCallback((props) => (
-    <CreatePostScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderCommentsScreen = useCallback((props) => (
-    <CommentsScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderCommunityRequestsScreen = useCallback((props) => (
-    <CommunityRequestsScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderCommunitySwipeScreen = useCallback((props) => (
-    <CommunitySwipeScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderCommunityOpportunitiesScreen = useCallback((props) => (
-    <CommunityOpportunitiesScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderCommunityChatScreen = useCallback((props) => (
-    <CommunityChatScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
+// Discover Stack Navigator
+const DiscoverStackNavigator = ({ user, userProfile }) => {
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
       }}
     >
-      <Stack.Screen name="CommunitiesList" children={renderCommunitiesListScreen} />
-      <Stack.Screen name="CommunityDetail" children={renderCommunityDetailScreen} />
-      <Stack.Screen name="CreateCommunity" children={renderCreateCommunityScreen} />
-      <Stack.Screen name="CreatePost" children={renderCreatePostScreen} />
-      <Stack.Screen name="Comments" children={renderCommentsScreen} />
-      <Stack.Screen name="CommunityRequests" children={renderCommunityRequestsScreen} />
-      <Stack.Screen name="CommunitySwipe" children={renderCommunitySwipeScreen} />
-      <Stack.Screen name="CommunityOpportunities" children={renderCommunityOpportunitiesScreen} />
-      <Stack.Screen 
-        name="CommunityChat" 
-        children={renderCommunityChatScreen}
-        options={({ route }) => ({
-          headerShown: true,
-          headerTitle: `${route.params?.communityName || 'Community'} Chat`,
-          headerStyle: {
-            backgroundColor: colors.primary[500],
-          },
-          headerTitleStyle: {
-            color: colors.white,
-            fontWeight: 'bold',
-          },
-          headerTintColor: colors.white,
-        })}
-      />
+      <Stack.Screen name="DiscoverMain">
+        {({ navigation, route }) => (
+          <SwipeScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="SwipeAdvanced">
+        {({ navigation, route }) => (
+          <SwipeScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="MyOpportunities">
+        {({ navigation, route }) => (
+          <MyOpportunitiesScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="AddOpportunity">
+        {({ navigation, route }) => (
+          <AddOpportunityScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="OrganizationProfile">
+        {({ navigation, route }) => (
+          <OrganizationProfileScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
     </Stack.Navigator>
   );
 };
 
-// Volunteer Tab Navigator
-const VolunteerTabNavigator = ({ user, userProfile, onProfileUpdate, onLogout }) => {
-  // Memoize render functions to prevent recreation on every render
-  const renderDiscoverScreen = useCallback((props) => (
-    <SwipeScreenSimple
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
+// Profile Stack Navigator
+const ProfileStackNavigator = ({ user, userProfile, onLogout }) => {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="ProfileMain">
+        {({ navigation, route }) => (
+          <ProfileScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile}
+            onLogout={onLogout}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="Impact">
+        {({ navigation, route }) => (
+          <ImpactScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+};
 
-  const renderMyOpportunitiesScreen = useCallback((props) => (
-    <MyOpportunitiesScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
+// Communities Stack Navigator
+const CommunitiesStackNavigator = ({ user, userProfile }) => {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="CommunitiesMain">
+        {({ navigation, route }) => (
+          <CommunitiesListScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="MyCommunities">
+        {({ navigation, route }) => (
+          <CommunitiesListScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile}
+            defaultJoinedOnly={true}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="CommunityDetail">
+        {({ navigation, route }) => (
+          <CommunityDetailScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="CreateCommunity">
+        {({ navigation, route }) => (
+          <CreateCommunityScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+      {/* Chat screen removed */}
+      <Stack.Screen name="CommunityOpportunities">
+        {({ navigation, route }) => (
+          <CommunityOpportunitiesScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="CommunitySwipe">
+        {({ navigation, route }) => (
+          <CommunitySwipeScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="CreatePost">
+        {({ navigation, route }) => (
+          <CreatePostScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="Comments">
+        {({ navigation, route }) => (
+          <CommentsScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="CommunityRequests">
+        {({ navigation, route }) => (
+          <CommunityRequestsScreen 
+            navigation={navigation} 
+            route={route}
+            user={user} 
+            userProfile={userProfile} 
+          />
+        )}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+};
 
-  const renderCommunitiesScreen = useCallback((props) => (
-    <CommunityStackNavigator
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderImpactScreen = useCallback((props) => (
-    <ImpactScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderProfileScreen = useCallback((props) => (
-    <ProfileScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-      onProfileUpdate={onProfileUpdate}
-      onLogout={onLogout}
-    />
-  ), [user, userProfile, onProfileUpdate, onLogout]);
+// Simple Tab Navigator
+const MainTabNavigator = ({ user, userProfile, onLogout }) => {
+  // Use passed props or fall back to mock data
+  const currentUser = user || { uid: 'mock-user-id', email: 'mock@example.com' };
+  const currentProfile = userProfile || mockUserProfile;
 
   return (
     <Tab.Navigator
@@ -212,250 +250,193 @@ const VolunteerTabNavigator = ({ user, userProfile, onProfileUpdate, onLogout })
           let iconName;
           if (route.name === 'Discover') {
             iconName = focused ? 'heart' : 'heart-outline';
-          } else if (route.name === 'My Opportunities') {
+          } else if (route.name === 'Saved') {
             iconName = focused ? 'bookmark' : 'bookmark-outline';
           } else if (route.name === 'Communities') {
             iconName = focused ? 'people' : 'people-outline';
-          } else if (route.name === 'Impact') {
-            iconName = focused ? 'trophy' : 'trophy-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#3498db',
-        tabBarInactiveTintColor: '#95a5a6',
+        tabBarActiveTintColor: '#1c1f4a',
+        tabBarInactiveTintColor: '#6b6c80',
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: '#fff',
-          borderTopWidth: 1,
-          borderTopColor: '#e1e8ed',
-          paddingBottom: 5,
-          paddingTop: 5,
-          height: 60,
+          borderTopColor: '#f3f4f6',
+          paddingTop: 8,
+          paddingBottom: 28,
+          height: 85,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
+          fontSize: 10,
+          fontWeight: '500',
         },
-        headerShown: false,
       })}
     >
-      <Tab.Screen name="Discover" children={renderDiscoverScreen} />
-      <Tab.Screen name="My Opportunities" children={renderMyOpportunitiesScreen} />
-      <Tab.Screen name="Communities" children={renderCommunitiesScreen} />
-      <Tab.Screen name="Impact" children={renderImpactScreen} />
-      <Tab.Screen name="Profile" children={renderProfileScreen} />
-    </Tab.Navigator>
-  );
-};
-
-// Organization Tab Navigator
-const OrganizationTabNavigator = ({ user, userProfile, onProfileUpdate, onLogout }) => {
-  // Memoize render functions to prevent recreation on every render
-  const renderAddOpportunityScreen = useCallback((props) => (
-    <AddOpportunityScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderMyOpportunitiesScreen = useCallback((props) => (
-    <MyOpportunitiesScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-      isOrganization={true}
-    />
-  ), [user, userProfile]);
-
-  const renderCommunitiesScreen = useCallback((props) => (
-    <CommunityStackNavigator
-      {...props}
-      user={user}
-      userProfile={userProfile}
-    />
-  ), [user, userProfile]);
-
-  const renderProfileScreen = useCallback((props) => (
-    <OrganizationProfileScreen
-      {...props}
-      user={user}
-      userProfile={userProfile}
-      onProfileUpdate={onProfileUpdate}
-      onLogout={onLogout}
-    />
-  ), [user, userProfile, onProfileUpdate, onLogout]);
-
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-          if (route.name === 'Add Opportunity') {
-            iconName = focused ? 'add-circle' : 'add-circle-outline';
-          } else if (route.name === 'My Opportunities') {
-            iconName = focused ? 'list' : 'list-outline';
-          } else if (route.name === 'Communities') {
-            iconName = focused ? 'people' : 'people-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'business' : 'business-outline';
-          }
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#e74c3c',
-        tabBarInactiveTintColor: '#95a5a6',
-        tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopWidth: 1,
-          borderTopColor: '#e1e8ed',
-          paddingBottom: 5,
-          paddingTop: 5,
-          height: 60,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
-        headerShown: false,
-      })}
-    >
-      <Tab.Screen name="Add Opportunity" children={renderAddOpportunityScreen} />
-      <Tab.Screen name="My Opportunities" children={renderMyOpportunitiesScreen} />
-      <Tab.Screen name="Communities" children={renderCommunitiesScreen} />
-      <Tab.Screen name="Profile" children={renderProfileScreen} />
+      <Tab.Screen name="Discover">
+        {({ navigation, route }) => (
+          <DiscoverStackNavigator 
+            navigation={navigation}
+            route={route}
+            user={currentUser} 
+            userProfile={currentProfile} 
+          />
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="Saved">
+        {({ navigation, route }) => (
+          <MyOpportunitiesScreen 
+            navigation={navigation}
+            route={route}
+            user={currentUser} 
+            userProfile={currentProfile} 
+          />
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="Communities">
+        {({ navigation, route }) => (
+          <CommunitiesStackNavigator 
+            navigation={navigation}
+            route={route}
+            user={currentUser} 
+            userProfile={currentProfile} 
+          />
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="Profile">
+        {({ navigation, route }) => (
+          <ProfileStackNavigator 
+            navigation={navigation}
+            route={route}
+            user={currentUser} 
+            userProfile={currentProfile} 
+            onLogout={onLogout} 
+          />
+        )}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 };
 
 // Main Root Navigator Component
 const RootNavigator = () => {
+  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    // Check Firebase auth state
+    const checkAuthState = async () => {
       try {
-        console.log('🔐 Auth state changed:', firebaseUser?.uid || 'No user');
-        setLoading(true);
+        // Import auth dynamically to avoid module-level errors
+        const { auth } = await import('../services/firebase');
         
-        if (firebaseUser) {
-          // User is logged in
-          setUser(firebaseUser);
-          await loadUserProfile(firebaseUser.uid);
-        } else {
-          // User is logged out
-          setUser(null);
-          setUserProfile(null);
+        if (auth) {
+          // Listen for auth state changes
+          const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+            console.log('🔐 Auth state changed:', firebaseUser?.uid || 'No user');
+            
+            if (firebaseUser) {
+              setUser(firebaseUser);
+              
+              // Load user profile from Firestore
+              try {
+                const { fetchUserProfile } = await import('../services/firestore');
+                const profile = await fetchUserProfile(firebaseUser.uid);
+                setUserProfile(profile);
+                console.log('✅ User profile loaded:', profile?.role);
+              } catch (error) {
+                console.log('⚠️ No user profile found; creating placeholder profile');
+                try {
+                  const { createUserProfile } = await import('../services/firestore');
+                  const minimal = {
+                    email: firebaseUser?.email || '',
+                    displayName: firebaseUser?.displayName || '',
+                    role: null,
+                    skills: [],
+                    interests: [],
+                  };
+                  await createUserProfile(firebaseUser.uid, minimal);
+                  setUserProfile(minimal);
+                } catch (createErr) {
+                  console.error('❌ Failed to create placeholder profile:', createErr);
+                  setUserProfile(null);
+                }
+              }
+            } else {
+              setUser(null);
+              setUserProfile(null);
+            }
+            
+            setLoading(false);
+          });
+          
+          return () => unsubscribe();
         }
       } catch (error) {
-        console.error('❌ Error handling auth state change:', error);
-      } finally {
-        setLoading(false);
-        setAuthChecked(true);
+        console.error('❌ Error setting up auth listener:', error);
       }
-    });
-
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
+      
+      // Fallback if Firebase isn't available
+      setLoading(false);
+    };
+    
+    checkAuthState();
   }, []);
 
-  const loadUserProfile = async (userId) => {
+  const handleLogout = async () => {
     try {
-      console.log('👤 Loading user profile for:', userId);
-      
-      // Try Firestore first, then fallback to mock
-      let profile;
-      try {
-        profile = await getUserProfile(userId);
-        if (profile) {
-          console.log('✅ User profile loaded from Firestore');
-        } else {
-          throw new Error('Profile not found in Firestore');
-        }
-      } catch (firestoreError) {
-        console.log('⚠️ Firestore failed, trying mock data:', firestoreError.message);
-        profile = await fetchUserProfile(userId);
+      const { auth } = await import('../services/firebase');
+      if (auth) {
+        await auth.signOut();
+        console.log('✅ User signed out');
       }
-      
-      setUserProfile(profile);
     } catch (error) {
-      console.error('❌ Error loading user profile:', error);
-      setUserProfile(null);
+      console.error('❌ Logout error:', error);
     }
   };
 
-  const handleAuthSuccess = async (authUser) => {
-    console.log('✅ Auth success:', authUser.uid);
-    setUser(authUser);
-    await loadUserProfile(authUser.uid);
-  };
-
-  const handleProfileUpdate = useCallback((updatedProfile) => {
-    console.log('📝 Profile updated:', updatedProfile);
-    setUserProfile(updatedProfile);
-  }, []);
-
-  const handleLogout = useCallback(async () => {
-    try {
-      console.log('👋 Logging out user...');
-      
-      // Sign out from Firebase (this will trigger the auth state listener)
-      await auth.signOut();
-      console.log('✅ User logged out successfully');
-    } catch (error) {
-      console.error('❌ Error logging out:', error);
-    }
-  }, []);
-
-  // Show loading spinner while checking auth
-  if (loading || !authChecked) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3498db" />
+        <ActivityIndicator size="large" color={colors.primary[500]} />
         <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
 
-  // Show auth screen if no user
-  if (!user) {
-    return <AuthStackNavigator />;
-  }
-
-  // Show role selection if user has no profile or no role
-  if (!userProfile || !userProfile.role) {
-    return (
-      <RoleSelectionScreen 
-        user={user} 
-        onRoleSelected={handleProfileUpdate}
-      />
-    );
-  }
-
-  // Route to appropriate tab navigator based on role
-  if (userProfile.role === 'organization') {
-    return (
-      <OrganizationTabNavigator
-        user={user}
-        userProfile={userProfile}
-        onProfileUpdate={handleProfileUpdate}
-        onLogout={handleLogout}
-      />
-    );
-  } else {
-    // Default to volunteer navigator
-    return (
-      <VolunteerTabNavigator
-        user={user}
-        userProfile={userProfile}
-        onProfileUpdate={handleProfileUpdate}
-        onLogout={handleLogout}
-      />
-    );
-  }
+  return (
+    <Stack.Navigator 
+      screenOptions={{ headerShown: false }}
+      initialRouteName={user ? "Main" : "Onboarding1"}
+    >
+      {!user ? (
+        // Onboarding and Auth screens
+        <>
+          <Stack.Screen name="Onboarding1" component={OnboardingScreen1} />
+          <Stack.Screen name="Onboarding2" component={OnboardingScreen2} />
+          <Stack.Screen name="Onboarding3" component={OnboardingScreen3} />
+          <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Signup" component={SignupScreen} />
+        </>
+      ) : (
+        <>
+          <Stack.Screen name="Main">
+            {() => (
+              <MainTabNavigator 
+                user={user} 
+                userProfile={userProfile}
+                onLogout={handleLogout}
+              />
+            )}
+          </Stack.Screen>
+        </>
+      )}
+    </Stack.Navigator>
+  );
 };
 
 const styles = StyleSheet.create({
@@ -466,10 +447,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: 10,
     fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
+    color: '#0f172a', // colors.gray[900]
   },
 });
 

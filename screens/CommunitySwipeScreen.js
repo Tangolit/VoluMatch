@@ -9,25 +9,34 @@ import {
   SafeAreaView,
   TouchableOpacity
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '../components/LazyIonicons';
 import { colors } from '../styles/colors';
 import { spacing } from '../styles/spacing';
-// Temporarily using mock service for development
+// Using real Firestore service
 import { 
+  saveSwipe,
   fetchCommunityOpportunities,
-  createOpportunitySwipe,
-  fetchUserSwipedOpportunities
-} from '../services/mockFirestore';
-import OpportunityCard from '../components/OpportunityCard';
+  getUserSwipes
+} from '../services/firestore';
 
-const { width: screenWidth } = Dimensions.get('window');
+// Helper to create opportunity swipe record
+const createOpportunitySwipe = async (userId, opportunityId, interested) => {
+  return await saveSwipe(userId, opportunityId, interested ? 'right' : 'left');
+};
+
+// Helper to get user's swiped opportunity IDs
+const fetchUserSwipedOpportunities = async (userId) => {
+  const swipes = await getUserSwipes(userId);
+  return swipes.map(s => s.opportunityId);
+};
+import OpportunityCard from '../components/OpportunityCard';
 
 /**
  * Community Swipe Screen
  * Allows users to swipe through opportunities shared with a specific community
  */
 const CommunitySwipeScreen = ({ navigation, route, user, userProfile }) => {
-  const { communityId, communityName } = route.params;
+  const { communityId, communityName } = route.params || {};
   const [opportunities, setOpportunities] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);

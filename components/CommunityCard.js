@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from './LazyIonicons';
 import { colors } from '../styles/colors';
 import { spacing } from '../styles/spacing';
 
@@ -28,7 +28,7 @@ const CommunityCard = ({
     );
   }
 
-  const { name, description, tags = [], memberCount = 0, isPublic = true } = community;
+  const { name, description, tags = [], memberCount = 0, isPublic = true } = community || {};
 
   const getJoinButtonText = () => {
     if (isJoined) return 'Joined';

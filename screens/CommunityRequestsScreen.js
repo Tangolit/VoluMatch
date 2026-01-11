@@ -10,15 +10,15 @@ import {
   ActivityIndicator,
   RefreshControl
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '../components/LazyIonicons';
 import { colors } from '../styles/colors';
 import { spacing } from '../styles/spacing';
-// Temporarily using mock service for development
+// Using real Firestore service
 import { 
   fetchOrganizationRequests, 
   approveJoinRequest, 
   rejectJoinRequest 
-} from '../services/mockFirestore';
+} from '../services/firestore';
 
 /**
  * Community Requests Screen
@@ -29,7 +29,12 @@ const CommunityRequestsScreen = ({ navigation, route, user, userProfile }) => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [processingRequests, setProcessingRequests] = useState(new Set());
+
+  const setupProcessingRequests = () => {
+    return useState(new Set());
+  };
+
+  const [processingRequests, setProcessingRequests] = setupProcessingRequests();
 
   useEffect(() => {
     navigation.setOptions({

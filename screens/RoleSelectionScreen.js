@@ -1,312 +1,264 @@
-// Screen for users to select their role (volunteer or organization)
+// Role Selection screen - Modern UI
 import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
-  Alert,
   ScrollView,
-  SafeAreaView,
+  Image,
+  Dimensions,
+  StatusBar
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-// Using mock Firestore for testing
-import { createUserProfile } from '../services/mockFirestore';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import Ionicons from '../components/LazyIonicons';
+import { colors } from '../styles/colors';
+import { spacing, shadows } from '../styles/spacing';
 
-const RoleSelectionScreen = ({ user, onRoleSelected }) => {
+const { width } = Dimensions.get('window');
+
+const RoleSelectionScreen = ({ navigation, user, onRoleSelected }) => {
   const [selectedRole, setSelectedRole] = useState(null);
-  const [loading, setLoading] = useState(false);
 
   const handleRoleSelect = (role) => {
     setSelectedRole(role);
+    // Navigate to Signup with selected role
+    navigation?.navigate?.('Signup', { selectedRole: role });
   };
 
-  const handleContinue = async () => {
-    if (!selectedRole) {
-      Alert.alert('Selection Required', 'Please select your role to continue.');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      // Create initial user profile with selected role
-      const initialProfile = {
-        role: selectedRole,
-        email: user.email,
-        displayName: user.displayName || '',
-        // Add role-specific defaults
-        ...(selectedRole === 'volunteer' ? {
-          skills: [],
-          interests: [],
-          hoursVolunteered: 0,
-          opportunitiesCompleted: 0,
-        } : {
-          orgName: '',
-          orgDescription: '',
-          orgContact: user.email,
-          orgWebsite: '',
-        })
-      };
-
-      await createUserProfile(user.uid, initialProfile);
-      
-      console.log('✅ User profile created with role:', selectedRole);
-      
-      // Notify parent component about role selection
-      onRoleSelected({
-        id: user.uid,
-        ...initialProfile,
-      });
-
-    } catch (error) {
-      console.error('Error creating user profile:', error);
-      Alert.alert(
-        'Error',
-        'Failed to set up your profile. Please try again.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setLoading(false);
+  const handleLoginPress = () => {
+    if (navigation?.navigate) {
+      navigation.navigate('Login');
     }
   };
 
   const roles = [
     {
       id: 'volunteer',
-      title: 'Volunteer',
-      description: 'I want to find and participate in volunteering opportunities',
+      title: 'I am a Volunteer',
+      description: 'I want to find opportunities to help my community.',
       icon: 'heart',
-      color: '#3498db',
-      features: [
-        'Discover opportunities near you',
-        'Track your volunteer hours',
-        'Build your impact profile',
-        'Connect with causes you care about'
-      ]
+      image: 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=800&h=600&fit=crop',
     },
     {
       id: 'organization',
-      title: 'Organization',
-      description: 'I represent an organization that needs volunteers',
+      title: 'I am an Organization',
+      description: 'I want to recruit dedicated volunteers for a cause.',
       icon: 'business',
-      color: '#e74c3c',
-      features: [
-        'Post volunteer opportunities',
-        'Manage your organization profile',
-        'Track volunteer engagement',
-        'Reach motivated volunteers'
-      ]
+      image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&h=600&fit=crop',
     }
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Top App Bar */}
+      <SafeAreaView edges={['top']} style={styles.topBarSafeArea}>
+        <View style={styles.topBar}>
+          <View style={styles.spacer} />
+          <Text style={styles.topBarTitle}>Welcome</Text>
+          <View style={styles.spacer} />
+        </View>
+      </SafeAreaView>
+
       <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Ionicons name="people" size={48} color="#3498db" />
-          <Text style={styles.headerTitle}>Welcome!</Text>
-          <Text style={styles.headerSubtitle}>
-            Choose your role to get started with volunteering
+        {/* Headline Section */}
+        <View style={styles.headlineSection}>
+          <Text style={styles.headline}>Choose your path</Text>
+          <Text style={styles.subheadline}>
+            Select how you'd like to use the platform today.
           </Text>
         </View>
 
         {/* Role Cards */}
-        <View style={styles.rolesContainer}>
+        <View style={styles.cardsContainer}>
           {roles.map((role) => (
             <TouchableOpacity
               key={role.id}
               style={[
                 styles.roleCard,
-                selectedRole === role.id && styles.selectedRoleCard,
-                { borderColor: role.color }
+                selectedRole === role.id && styles.selectedCard
               ]}
               onPress={() => handleRoleSelect(role.id)}
-              disabled={loading}
+              activeOpacity={0.95}
             >
-              <View style={styles.roleHeader}>
-                <View style={[styles.roleIcon, { backgroundColor: role.color }]}>
-                  <Ionicons name={role.icon} size={32} color="#fff" />
+              {/* Image Section */}
+              <View style={styles.imageContainer}>
+                <Image
+                  source={{ uri: role.image }}
+                  style={styles.cardImage}
+                  resizeMode="cover"
+                />
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.6)']}
+                  style={styles.imageOverlay}
+                />
+                <View style={styles.iconOverlay}>
+                  <Ionicons name={role.icon} size={28} color={colors.white} />
                 </View>
-                <View style={styles.roleInfo}>
-                  <Text style={[styles.roleTitle, { color: role.color }]}>
-                    {role.title}
-                  </Text>
-                  <Text style={styles.roleDescription}>
-                    {role.description}
-                  </Text>
-                </View>
-                {selectedRole === role.id && (
-                  <Ionicons name="checkmark-circle" size={24} color={role.color} />
-                )}
               </View>
 
-              <View style={styles.featuresContainer}>
-                {role.features.map((feature, index) => (
-                  <View key={index} style={styles.featureItem}>
-                    <Ionicons name="checkmark" size={16} color={role.color} />
-                    <Text style={styles.featureText}>{feature}</Text>
+              {/* Content Section */}
+              <View style={styles.cardContent}>
+                <View style={styles.cardTitleRow}>
+                  <Text style={styles.cardTitle}>{role.title}</Text>
+                  <Ionicons 
+                    name="chevron-forward" 
+                    size={24} 
+                    color={colors.primary[500]} 
+                  />
                   </View>
-                ))}
+                <Text style={styles.cardDescription}>{role.description}</Text>
               </View>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Continue Button */}
-        <View style={styles.buttonContainer}>
+        {/* Footer Links */}
+        <View style={styles.footer}>
           <TouchableOpacity
-            style={[
-              styles.continueButton,
-              !selectedRole && styles.disabledButton,
-              loading && styles.disabledButton
-            ]}
-            onPress={handleContinue}
-            disabled={!selectedRole || loading}
+            style={styles.loginLink}
+            onPress={handleLoginPress}
+            activeOpacity={0.7}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Text style={styles.continueButtonText}>Continue</Text>
-                <Ionicons name="arrow-forward" size={20} color="#fff" />
-              </>
-            )}
+            <Text style={styles.loginText}>Already have an account?</Text>
+            <Text style={styles.loginLinkText}>Log in</Text>
           </TouchableOpacity>
-
-          <Text style={styles.footerText}>
-            You can always change your role settings later in your profile
-          </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.gray[50],
   },
-  scrollContainer: {
-    flexGrow: 1,
-    padding: 20,
-    paddingBottom: 40,
+  topBarSafeArea: {
+    backgroundColor: colors.gray[50],
   },
-  header: {
+  topBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 30,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingBottom: spacing.xs,
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-    marginTop: 16,
+  spacer: {
+    width: 48,
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#7f8c8d',
+  topBarTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.primary[500],
+    letterSpacing: -0.3,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.md,
+  },
+  headlineSection: {
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    alignItems: 'center',
+  },
+  headline: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: colors.gray[900],
+    letterSpacing: -0.5,
+    marginBottom: spacing.sm,
     textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 24,
-    paddingHorizontal: 20,
   },
-  rolesContainer: {
-    gap: 16,
-    marginBottom: 30,
+  subheadline: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.gray[500],
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  cardsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   roleCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: '#e1e8ed',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  selectedRoleCard: {
-    borderWidth: 3,
-    shadowOpacity: 0.2,
-    transform: [{ scale: 1.02 }],
-  },
-  roleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  roleIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  roleInfo: {
-    flex: 1,
-  },
-  roleTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  roleDescription: {
-    fontSize: 15,
-    color: '#7f8c8d',
-    lineHeight: 20,
-  },
-  featuresContainer: {
-    gap: 6,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  featureText: {
-    fontSize: 14,
-    color: '#2c3e50',
-    flex: 1,
-  },
-  buttonContainer: {
-    marginTop: 20,
-  },
-  continueButton: {
-    backgroundColor: '#3498db',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
+    backgroundColor: colors.white,
     borderRadius: 12,
-    gap: 8,
-    marginBottom: 16,
+    overflow: 'hidden',
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
   },
-  disabledButton: {
-    backgroundColor: '#bdc3c7',
+  selectedCard: {
+    borderColor: colors.primary[500],
+    borderWidth: 2,
+    transform: [{ scale: 0.99 }],
+    },
+  imageContainer: {
+    height: 160,
+    position: 'relative',
   },
-  continueButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  cardImage: {
+    width: '100%',
+    height: '100%',
   },
-  footerText: {
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  iconOverlay: {
+    position: 'absolute',
+    bottom: spacing.md,
+    left: spacing.md,
+  },
+  cardContent: {
+    padding: spacing.lg,
+    gap: spacing.xs,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.gray[900],
+    letterSpacing: -0.3,
+  },
+  cardDescription: {
+    fontSize: 16,
+    color: colors.gray[500],
+    lineHeight: 22,
+    marginTop: spacing.xs,
+  },
+  footer: {
+    alignItems: 'center',
+    paddingVertical: spacing['3xl'],
+  },
+  loginLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    padding: spacing.sm,
+  },
+  loginText: {
     fontSize: 14,
-    color: '#95a5a6',
-    textAlign: 'center',
-    lineHeight: 20,
-    paddingHorizontal: 20,
+    fontWeight: '500',
+    color: colors.gray[500],
+  },
+  loginLinkText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary[500],
   },
 });
 

@@ -1,4 +1,4 @@
-// Main swiping screen for volunteering opportunities
+// Main swiping screen for volunteering opportunities - Modern UI
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -7,22 +7,26 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator,
-  TouchableOpacity
+  TouchableOpacity,
+  StatusBar
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Swiper from 'react-native-deck-swiper';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '../components/LazyIonicons';
 import { mockOpportunities } from '../data/mockData';
 import OpportunityCard from '../components/OpportunityCard';
 import { fetchOpportunities, saveUserInterest } from '../services/firestore';
+import { saveSwipeLocally } from '../services/localSwipeStorage';
 import { getCurrentLocation, filterOpportunitiesByLocation } from '../utils/location';
 import { colors } from '../styles/colors';
 import { typography } from '../styles/typography';
-import { spacing, borderRadius, shadows } from '../styles/spacing';
+import { spacing, shadows } from '../styles/spacing';
+import recommendationEngine from '../services/recommendationEngine';
 
 const { width, height } = Dimensions.get('window');
 
-const SwipeScreen = ({ user, userProfile }) => {
+const SwipeScreen = ({ navigation, user, userProfile }) => {
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cardIndex, setCardIndex] = useState(0);
@@ -34,7 +38,6 @@ const SwipeScreen = ({ user, userProfile }) => {
     getUserLocation();
   }, []);
 
-  // Get user's current location
   const getUserLocation = async () => {
     const location = await getCurrentLocation();
     if (location) {
@@ -42,67 +45,77 @@ const SwipeScreen = ({ user, userProfile }) => {
     }
   };
 
-  // Load opportunities from Firestore with fallback to mock data
   const loadOpportunities = async () => {
     try {
       setLoading(true);
       
-      // Try to fetch from Firestore first
+      await recommendationEngine.initialize(
+        user?.uid || 'anonymous-user',
+        userProfile || { skills: [], interests: [] }
+      );
+      
+      let fetchedOpportunities = [];
+      
       try {
-        const fetchedOpportunities = await fetchOpportunities();
-        if (fetchedOpportunities.length > 0) {
-          setOpportunities(fetchedOpportunities);
-          return;
-        }
+        fetchedOpportunities = await fetchOpportunities();
+        console.log(`✅ Fetched ${fetchedOpportunities.length} opportunities from Firestore`);
       } catch (firestoreError) {
-        console.log('Firestore not available, using mock data:', firestoreError.message);
+        console.log('⚠️ Firestore not available, using mock data:', firestoreError.message);
+        fetchedOpportunities = [];
       }
       
-      // Fallback to mock data if Firestore is not available or empty
-      setOpportunities(mockOpportunities);
+      if (!fetchedOpportunities || fetchedOpportunities.length === 0) {
+        console.log('📋 Using mock opportunities data');
+        fetchedOpportunities = mockOpportunities;
+      }
+      
+      try {
+        const scoredOpportunities = recommendationEngine.calculateMatchScores(
+          fetchedOpportunities,
+          userProfile
+        );
+        console.log(`✅ Scored ${scoredOpportunities.length} opportunities`);
+        setOpportunities(scoredOpportunities);
+      } catch (scoreError) {
+        console.error('❌ Error scoring opportunities:', scoreError);
+        setOpportunities(fetchedOpportunities);
+      }
       
     } catch (error) {
-      console.error('Error loading opportunities:', error);
-      Alert.alert('Error', 'Failed to load opportunities. Please try again.');
-      // Final fallback to mock data
+      console.error('❌ Error loading opportunities:', error);
       setOpportunities(mockOpportunities);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter opportunities based on user location and skills
   const getFilteredOpportunities = () => {
-    let filtered = opportunities;
+    let filtered = opportunities && opportunities.length > 0 ? opportunities : mockOpportunities;
 
-    // Filter by location (25 mile radius)
+    const searchRadius = userProfile?.searchRadius || 25;
     if (userLocation) {
-      filtered = filterOpportunitiesByLocation(filtered, userLocation, 25);
+      const byLocation = filterOpportunitiesByLocation(filtered, userLocation, searchRadius);
+      filtered = byLocation.length > 0 ? byLocation : filtered;
     }
 
-    // Advanced skill/interest-based matching
     if (userProfile?.skills?.length > 0 || userProfile?.interests?.length > 0) {
       const userSkills = userProfile.skills || [];
       const userInterests = userProfile.interests || [];
       
-      // Calculate match score for each opportunity
       const scoredOpportunities = filtered.map(opp => {
         let score = 0;
         
-        // Skills matching (higher weight)
         if (opp.requiredSkills) {
           const skillMatches = opp.requiredSkills.filter(skill => userSkills.includes(skill)).length;
-          score += skillMatches * 3; // Weight skills heavily
+          score += skillMatches * 3;
         }
         
-        // Interest matching (lower weight but still important)
         if (opp.category) {
           if (userInterests.includes(opp.category)) {
             score += 2;
           }
         }
         
-        // Organization type matching
         if (opp.organizationType && userInterests.includes(opp.organizationType)) {
           score += 1;
         }
@@ -110,55 +123,39 @@ const SwipeScreen = ({ user, userProfile }) => {
         return { ...opp, matchScore: score };
       });
       
-      // Sort by match score (highest first), then by creation date
       filtered = scoredOpportunities.sort((a, b) => {
         if (b.matchScore !== a.matchScore) {
           return b.matchScore - a.matchScore;
         }
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
-      
-      // If no matches found, show all opportunities
-      if (filtered.every(opp => opp.matchScore === 0)) {
-        console.log('No skill/interest matches found, showing all opportunities');
-      } else {
-        console.log(`Found ${filtered.filter(opp => opp.matchScore > 0).length} opportunities with skill/interest matches`);
-      }
     }
 
     return filtered;
   };
 
-  // Handle right swipe (interested)
   const onSwipedRight = async (cardIndex) => {
     const opportunity = getFilteredOpportunities()[cardIndex];
     console.log('Swiped right on:', opportunity.title);
     
     try {
-      // Save interest to Firestore
+      if (user?.uid) {
+        try {
+          await saveSwipeLocally(user.uid, opportunity.id, 'right');
+        } catch (e) {
+          console.log('Local swipe save failed (non-fatal):', e?.message);
+        }
+      }
       if (user?.uid) {
         try {
           await saveUserInterest(user.uid, opportunity.id);
         } catch (firestoreError) {
           console.log('Could not save to Firestore:', firestoreError.message);
-          // Continue with local storage or skip saving for demo
         }
-      }
+        }
       
-      // Update user profile with estimated hours (for impact tracking)
-      if (userProfile && opportunity.duration) {
-        const updatedProfile = {
-          ...userProfile,
-          hoursVolunteered: (userProfile.hoursVolunteered || 0) + opportunity.duration,
-          opportunitiesCompleted: (userProfile.opportunitiesCompleted || 0) + 1
-        };
-        // This would normally update Firestore, for now it's just logged
-        console.log('Updated profile stats:', updatedProfile);
-      }
-      
-      // For demo, show success message
       Alert.alert(
-        'Great choice!', 
+        'Great choice! 🎉', 
         `You've shown interest in "${opportunity.title}". The organization will be notified.`,
         [{ text: 'OK' }]
       );
@@ -167,14 +164,14 @@ const SwipeScreen = ({ user, userProfile }) => {
     }
   };
 
-  // Handle left swipe (not interested)
   const onSwipedLeft = (cardIndex) => {
     const opportunity = getFilteredOpportunities()[cardIndex];
     console.log('Swiped left on:', opportunity.title);
-    // Optionally save to dismissed list later
+    if (user?.uid) {
+      saveSwipeLocally(user.uid, opportunity.id, 'left').catch(() => {});
+    }
   };
 
-  // Handle when all cards are swiped
   const onSwipedAll = () => {
     Alert.alert(
       'No more opportunities!',
@@ -186,25 +183,51 @@ const SwipeScreen = ({ user, userProfile }) => {
     );
   };
 
+  // Manual swipe functions for action buttons
+  const handleSwipeLeft = () => {
+    if (swiperRef.current) {
+      swiperRef.current.swipeLeft();
+    }
+  };
+
+  const handleSwipeRight = () => {
+    if (swiperRef.current) {
+      swiperRef.current.swipeRight();
+    }
+  };
+
+  const handleSuperLike = () => {
+    Alert.alert('Super Like!', 'This feature is coming soon!');
+  };
+
+  const handleOpenFilters = () => {
+    Alert.alert('Filters', 'Filter options coming soon!');
+  };
+
+  const handleOpenProfile = () => {
+    if (navigation?.navigate) {
+      navigation.navigate('Profile');
+    }
+  };
+
   const filteredOpportunities = getFilteredOpportunities();
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3498db" />
-        <Text style={styles.loadingText}>Loading opportunities...</Text>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <Text style={styles.loadingText}>Finding opportunities for you...</Text>
       </View>
     );
   }
 
-  // Check if user under 18 needs parental consent
   if (userProfile?.age < 18 && !userProfile?.parentalConsent) {
     return (
-      <View style={styles.consentContainer}>
-        <Text style={styles.consentTitle}>Parental Consent Required</Text>
-        <Text style={styles.consentText}>
+      <View style={styles.emptyContainer}>
+        <Ionicons name="alert-circle" size={64} color={colors.error[500]} />
+        <Text style={styles.emptyTitle}>Parental Consent Required</Text>
+        <Text style={styles.emptyText}>
           Since you're under 18, please get parental consent before volunteering.
-          You can update this in your profile settings.
         </Text>
       </View>
     );
@@ -213,39 +236,57 @@ const SwipeScreen = ({ user, userProfile }) => {
   if (filteredOpportunities.length === 0) {
     return (
       <View style={styles.emptyContainer}>
+        <Ionicons name="search" size={64} color={colors.gray[400]} />
         <Text style={styles.emptyTitle}>No opportunities found</Text>
         <Text style={styles.emptyText}>
-          Try adjusting your location settings or check back later for new opportunities.
+          Try adjusting your location settings or check back later.
         </Text>
+        <TouchableOpacity style={styles.reloadButton} onPress={loadOpportunities}>
+          <Text style={styles.reloadButtonText}>Reload</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Beautiful Gradient Header */}
-      <LinearGradient
-        colors={colors.gradients.primary}
-        style={styles.header}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Discover</Text>
-          <Text style={styles.headerSubtitle}>
-            {filteredOpportunities.length} opportunities near you
-          </Text>
-          
-          {/* Location indicator */}
-          {userLocation && (
-            <View style={styles.locationIndicator}>
-              <Ionicons name="location" size={16} color={colors.white} />
-              <Text style={styles.locationText}>Within 25 miles</Text>
-            </View>
-          )}
-        </View>
-      </LinearGradient>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Header */}
+      <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
+        <View style={styles.header}>
+          {/* Profile Button */}
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={handleOpenProfile}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person" size={22} color={colors.gray[400]} />
+          </TouchableOpacity>
 
+          {/* Title & Location */}
+          <View style={styles.headerCenter}>
+            <View style={styles.titleRow}>
+          <Text style={styles.headerTitle}>Discover</Text>
+              <Ionicons name="flash" size={18} color="#FFD700" />
+            </View>
+          <Text style={styles.headerSubtitle}>
+              {userLocation ? 'Near you' : 'All locations'} • Within {userProfile?.searchRadius || 10}mi
+          </Text>
+          </View>
+
+          {/* Filter Button */}
+          <TouchableOpacity 
+            style={styles.headerButton}
+            onPress={handleOpenFilters}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="options" size={22} color={colors.primary[500]} />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+
+      {/* Card Swiper */}
       <View style={styles.swiperContainer}>
         <Swiper
           ref={swiperRef}
@@ -259,52 +300,55 @@ const SwipeScreen = ({ user, userProfile }) => {
           cardIndex={cardIndex}
           backgroundColor={'transparent'}
           stackSize={3}
+          stackScale={8}
+          stackSeparation={14}
           cardVerticalMargin={0}
-          cardHorizontalMargin={10}
+          cardHorizontalMargin={0}
           animateCardOpacity
+          animateOverlayLabelsOpacity
           swipeBackCard
+          verticalSwipe={false}
+          horizontalSwipe={true}
           overlayLabels={{
             left: {
               title: 'PASS',
               style: {
                 label: {
-                  backgroundColor: colors.error[500],
                   borderColor: colors.error[500],
-                  color: colors.white,
-                  borderWidth: 1,
-                  fontSize: 24,
-                  fontWeight: 'bold',
-                  padding: 10,
-                  borderRadius: 10,
+                  color: colors.error[500],
+                  borderWidth: 4,
+                  fontSize: 32,
+                  fontWeight: '900',
+                  padding: 12,
+                  borderRadius: 8,
                 },
                 wrapper: {
                   flexDirection: 'column',
                   alignItems: 'flex-end',
                   justifyContent: 'flex-start',
-                  marginTop: 30,
-                  marginLeft: -30,
+                  marginTop: 40,
+                  marginRight: 32,
                 }
               }
             },
             right: {
-              title: 'INTERESTED!',
+              title: 'INTERESTED',
               style: {
                 label: {
-                  backgroundColor: colors.success[500],
                   borderColor: colors.success[500],
-                  color: colors.white,
-                  borderWidth: 1,
-                  fontSize: 24,
-                  fontWeight: 'bold',
-                  padding: 10,
-                  borderRadius: 10,
+                  color: colors.success[500],
+                  borderWidth: 4,
+                  fontSize: 28,
+                  fontWeight: '900',
+                  padding: 12,
+                  borderRadius: 8,
                 },
                 wrapper: {
                   flexDirection: 'column',
                   alignItems: 'flex-start',
                   justifyContent: 'flex-start',
-                  marginTop: 30,
-                  marginLeft: 30,
+                  marginTop: 40,
+                  marginLeft: 32,
                 }
               }
             }
@@ -313,34 +357,39 @@ const SwipeScreen = ({ user, userProfile }) => {
       </View>
 
       {/* Action Buttons */}
-      <View style={styles.actionButtons}>
+      <View style={styles.actionButtonsContainer}>
+        {/* Pass Button */}
         <TouchableOpacity 
-          style={[styles.actionButton, styles.passButton]}
-          onPress={() => swiperRef.current?.swipeLeft()}
+          style={styles.actionButton}
+          onPress={handleSwipeLeft}
+          activeOpacity={0.8}
         >
-          <Ionicons name="close" size={32} color={colors.white} />
+          <Ionicons name="close" size={32} color={colors.error[500]} />
         </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.interestButton]}
-          onPress={() => swiperRef.current?.swipeRight()}
-        >
-          <Ionicons name="heart" size={32} color={colors.white} />
-        </TouchableOpacity>
-      </View>
 
-      {/* Enhanced Instructions */}
-      <View style={styles.instructions}>
-        <View style={styles.instructionItem}>
-          <Ionicons name="arrow-back" size={20} color={colors.error[500]} />
-          <Text style={styles.instructionText}>Swipe left to pass</Text>
+        {/* Super Like Button */}
+        <TouchableOpacity 
+          style={styles.actionButtonSmall}
+          onPress={handleSuperLike}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="star" size={22} color="#3B82F6" />
+        </TouchableOpacity>
+
+        {/* Like Button */}
+        <TouchableOpacity 
+          style={styles.likeButton}
+          onPress={handleSwipeRight}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={[colors.success[500], '#4ade80']}
+            style={styles.likeButtonGradient}
+          >
+            <Ionicons name="heart" size={32} color={colors.white} />
+          </LinearGradient>
+        </TouchableOpacity>
         </View>
-        <View style={styles.instructionDivider} />
-        <View style={styles.instructionItem}>
-          <Ionicons name="arrow-forward" size={20} color={colors.success[500]} />
-          <Text style={styles.instructionText}>Swipe right for interest</Text>
-        </View>
-      </View>
     </View>
   );
 };
@@ -348,146 +397,140 @@ const SwipeScreen = ({ user, userProfile }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.gray[50],
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.gray[50],
   },
   loadingText: {
-    ...typography.styles.body1,
-    color: colors.text.secondary,
+    fontSize: 16,
+    color: colors.gray[500],
     marginTop: spacing.lg,
-  },
-  consentContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-    backgroundColor: colors.background,
-  },
-  consentTitle: {
-    ...typography.styles.h3,
-    color: colors.error[500],
-    marginBottom: spacing.lg,
-    textAlign: 'center',
-  },
-  consentText: {
-    ...typography.styles.body1,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: typography.lineHeights.relaxed * typography.sizes.base,
+    fontWeight: '500',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.xl,
-    backgroundColor: colors.background,
+    backgroundColor: colors.gray[50],
   },
   emptyTitle: {
-    ...typography.styles.h3,
-    color: colors.text.primary,
-    marginBottom: spacing.lg,
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.gray[900],
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
     textAlign: 'center',
   },
   emptyText: {
-    ...typography.styles.body1,
-    color: colors.text.secondary,
+    fontSize: 16,
+    color: colors.gray[500],
     textAlign: 'center',
-    lineHeight: typography.lineHeights.relaxed * typography.sizes.base,
+    lineHeight: 24,
+    maxWidth: 280,
+  },
+  reloadButton: {
+    marginTop: spacing.xl,
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.md,
+    borderRadius: 12,
+  },
+  reloadButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  headerSafeArea: {
+    backgroundColor: colors.gray[50],
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: spacing.xl,
-    paddingHorizontal: spacing.xl,
-  },
-  headerContent: {
-    alignItems: 'center',
-  },
-  headerTitle: {
-    ...typography.styles.h1,
-    color: colors.white,
-    marginBottom: spacing.sm,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  headerSubtitle: {
-    ...typography.styles.body1,
-    color: colors.white,
-    opacity: 0.9,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  locationIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    gap: spacing.xs,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
-  locationText: {
-    ...typography.styles.caption,
-    color: colors.white,
-    fontWeight: typography.weights.medium,
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.sm,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.primary[500],
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.gray[400],
+    marginTop: 2,
   },
   swiperContainer: {
     flex: 1,
-    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
-  actionButtons: {
+  actionButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
+    justifyContent: 'center',
+    gap: spacing.lg,
     paddingVertical: spacing.lg,
-    gap: spacing['4xl'],
+    paddingBottom: spacing.xl,
   },
   actionButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.white,
     alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.lg,
+    borderWidth: 1,
+    borderColor: colors.gray[100],
+  },
+  actionButtonSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.gray[100],
+  },
+  likeButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
     ...shadows.lg,
   },
-  passButton: {
-    backgroundColor: colors.error[500],
-  },
-  interestButton: {
-    backgroundColor: colors.success[500],
-  },
-  instructions: {
-    flexDirection: 'row',
+  likeButtonGradient: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xl,
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-    borderRadius: borderRadius.lg,
-    ...shadows.sm,
-  },
-  instructionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  instructionDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: colors.border.light,
-    marginHorizontal: spacing.lg,
-  },
-  instructionText: {
-    ...typography.styles.body2,
-    color: colors.text.secondary,
   },
 });
 

@@ -7,7 +7,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from './LazyIonicons';
 import { colors } from '../styles/colors';
 import { typography } from '../styles/typography';
 import { spacing, borderRadius, shadows } from '../styles/spacing';

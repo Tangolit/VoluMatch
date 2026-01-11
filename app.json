@@ -1,29 +1,59 @@
 {
   "expo": {
-    "name": "tinder-for-volunteering",
-    "slug": "tinder-for-volunteering",
+    "name": "VoluMatch",
+    "slug": "volumatch",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",  
-    "newArchEnabled": true,
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.volumatch.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to show you volunteer opportunities near you.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location to show you volunteer opportunities near you."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.volumatch.app",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow VoluMatch to use your location to show nearby volunteer opportunities."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8018b196-8209-4125-bb2c-08e9a0b33b4f"
+      }
     }
   }
 }

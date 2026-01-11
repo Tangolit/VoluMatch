@@ -264,5 +264,40 @@ class MessageCacheManager {
   }
 }
 
-// Export singleton instance
-export default new MessageCacheManager();
+// Export singleton instance with lazy initialization
+let messageCacheManagerInstance = null;
+
+const getMessageCacheManager = () => {
+  if (!messageCacheManagerInstance) {
+    messageCacheManagerInstance = new MessageCacheManager();
+  }
+  return messageCacheManagerInstance;
+};
+
+// Export an object with methods that forward to the lazy instance
+export default {
+  cacheMessages(...args) {
+    return getMessageCacheManager().cacheMessages(...args);
+  },
+  getCachedMessages(...args) {
+    return getMessageCacheManager().getCachedMessages(...args);
+  },
+  updateCacheWithChanges(...args) {
+    return getMessageCacheManager().updateCacheWithChanges(...args);
+  },
+  mergeOlderMessages(...args) {
+    return getMessageCacheManager().mergeOlderMessages(...args);
+  },
+  isCacheValid(...args) {
+    return getMessageCacheManager().isCacheValid(...args);
+  },
+  clearCache(...args) {
+    return getMessageCacheManager().clearCache(...args);
+  },
+  clearAllCaches(...args) {
+    return getMessageCacheManager().clearAllCaches(...args);
+  },
+  getCacheStats(...args) {
+    return getMessageCacheManager().getCacheStats(...args);
+  }
+};

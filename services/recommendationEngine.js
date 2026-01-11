@@ -248,35 +248,75 @@ class RecommendationEngine {
    * Calculate recommendation score for an opportunity
    */
   calculateRecommendationScore(opportunity) {
-    let score = 0;
+    // Validate input
+    if (!opportunity || typeof opportunity !== 'object') {
+      console.warn('🚨 calculateRecommendationScore: Invalid opportunity:', opportunity);
+      return 0.7; // Return default score for invalid opportunities
+    }
+    
+    // Start with a base score of 0.5 (ensures minimum variety)
+    let score = 0.5;
     
     try {
-      // Base score from traditional matching
+      // Base score from traditional matching (adds up to 0.15)
       const baseScore = this.calculateBaseScore(opportunity);
-      score += baseScore * 0.3;
+      score += baseScore * 0.15;
 
-      // Collaborative filtering score
+      // Collaborative filtering score (adds up to 0.1)
       const collaborativeScore = this.calculateCollaborativeScore(opportunity);
-      score += collaborativeScore * 0.2;
+      score += collaborativeScore * 0.1;
 
-      // Content-based score
+      // Content-based score (adds up to 0.15)
       const contentScore = this.calculateContentScore(opportunity);
-      score += contentScore * 0.3;
+      score += contentScore * 0.15;
 
-      // Behavioral score
+      // Behavioral score (adds up to 0.05)
       const behavioralScore = this.calculateBehavioralScore(opportunity);
-      score += behavioralScore * 0.15;
+      score += behavioralScore * 0.05;
 
-      // Exploration bonus (prevent filter bubbles)
+      // Exploration bonus (adds up to 0.05)
       const explorationBonus = this.calculateExplorationBonus(opportunity);
       score += explorationBonus * 0.05;
+      
+      // Add variety based on opportunity attributes
+      const varietyBonus = this.calculateVarietyBonus(opportunity);
+      score += varietyBonus;
 
-      const finalScore = Math.max(0, Math.min(1, score)); // Normalize to 0-1
+      const finalScore = Math.max(0.5, Math.min(0.98, score)); // Keep between 50-98%
       return finalScore;
     } catch (error) {
       console.error('🚨 Error in calculateRecommendationScore for', opportunity?.title, ':', error);
       throw error;
     }
+  }
+  
+  /**
+   * Add variety based on opportunity attributes to ensure different scores
+   */
+  calculateVarietyBonus(opportunity) {
+    let bonus = 0;
+    
+    // Verified opportunities get a bonus
+    if (opportunity.verified) {
+      bonus += 0.05;
+    }
+    
+    // Opportunities with images get a small bonus
+    if (opportunity.imageUrl) {
+      bonus += 0.02;
+    }
+    
+    // Use opportunity ID to add consistent pseudo-random variety
+    const id = (opportunity.id || '').toString();
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = ((hash << 5) - hash) + id.charCodeAt(i);
+      hash = hash & hash;
+    }
+    // Add 0-10% variety based on ID hash
+    bonus += (Math.abs(hash) % 100) / 1000;
+    
+    return bonus;
   }
 
   /**
@@ -478,14 +518,42 @@ class RecommendationEngine {
     console.log('🔍 this.userProfile state:', this.userProfile);
     console.log('🔍 this.userId state:', this.userId);
     
+    // Validate input
+    if (!opportunities || !Array.isArray(opportunities)) {
+      console.warn('🚨 getRecommendations: Invalid opportunities array:', opportunities);
+      return [];
+    }
+    
+    // Filter out invalid opportunities before processing
+    const validOpportunities = opportunities.filter(opp => 
+      opp && typeof opp === 'object' && opp.id
+    );
+    
+    if (validOpportunities.length === 0) {
+      console.warn('🚨 getRecommendations: No valid opportunities found');
+      return [];
+    }
+    
+    console.log(`🔍 Processing ${validOpportunities.length} valid opportunities out of ${opportunities.length} total`);
+    
     let scoredOpportunities;
     
     try {
       // Calculate scores for all opportunities
       console.log('🧪 Starting opportunity scoring...');
-      scoredOpportunities = opportunities.map((opportunity, index) => {
+      scoredOpportunities = validOpportunities.map((opportunity, index) => {
         try {
+          // Check if opportunity is valid before processing
+          if (!opportunity || typeof opportunity !== 'object') {
+            console.warn(`🚨 Invalid opportunity at index ${index}:`, opportunity);
+            return null; // Skip invalid opportunities
+          }
+          
           const score = this.calculateRecommendationScore(opportunity);
+          // Make sure opportunity is valid before spreading
+          if (!opportunity || typeof opportunity !== 'object') {
+            return null;
+          }
           return {
             ...opportunity,
             recommendationScore: score,
@@ -493,13 +561,18 @@ class RecommendationEngine {
           };
         } catch (error) {
           console.error(`🚨 Error scoring opportunity ${index + 1} (${opportunity?.title}):`, error);
-          return {
-            ...opportunity,
-            recommendationScore: 0.5, // Default score
-            timestamp: Date.now()
-          };
+          // Only spread if opportunity is valid
+          if (opportunity && typeof opportunity === 'object') {
+            return {
+              ...opportunity,
+              recommendationScore: 0.5, // Default score
+              timestamp: Date.now()
+            };
+          } else {
+            return null; // Skip invalid opportunities
+          }
         }
-      });
+      }).filter(Boolean); // Remove null entries
       console.log('✅ All opportunities scored successfully');
     } catch (error) {
       console.error('🚨 Error in getRecommendations opportunity mapping:', error);
@@ -584,10 +657,39 @@ class RecommendationEngine {
   setUserProfile(profile) {
     this.userProfile = profile;
   }
+  
+  /**
+   * Calculate match scores for a list of opportunities
+   * This is a convenience method used by SwipeScreen
+   */
+  calculateMatchScores(opportunities, userProfile) {
+    try {
+      console.log('📊 Calculating match scores for', opportunities?.length, 'opportunities');
+      
+      // Set user profile if provided
+      if (userProfile) {
+        this.userProfile = userProfile;
+      }
+      
+      // Validate input
+      if (!opportunities || !Array.isArray(opportunities)) {
+        console.warn('⚠️ Invalid opportunities array in calculateMatchScores');
+        return [];
+      }
+      
+      // Get recommendations (which adds scores)
+      return this.getRecommendations(opportunities, opportunities.length);
+    } catch (error) {
+      console.error('❌ Error calculating match scores:', error);
+      return opportunities; // Return original opportunities as fallback
+    }
+  }
 }
 
-// Export singleton instance
-export const recommendationEngine = new RecommendationEngine();
-export default RecommendationEngine;
+// Create and initialize the singleton instance
+let recommendationEngineInstance = new RecommendationEngine();
+
+// Export the singleton instance
+export default recommendationEngineInstance;
 
 

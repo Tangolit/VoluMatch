@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from './LazyIonicons';
 import { colors } from '../styles/colors';
 import { spacing } from '../styles/spacing';
 // Temporarily using mock service for development
@@ -24,7 +24,7 @@ const CommentItem = ({
     text,
     userID,
     createdAt
-  } = comment;
+  } = comment || {};
 
   const loadUserProfile = useCallback(async () => {
     try {

@@ -1,3 +1,4 @@
+// Create Post Screen - Direct conversion from Figma Make HTML
 import React, { useState } from 'react';
 import {
   View,
@@ -8,39 +9,69 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
-  ActivityIndicator
+  StatusBar,
+  ActivityIndicator,
+  Image,
+  ScrollView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../styles/colors';
-import { spacing } from '../styles/spacing';
-// Temporarily using mock service for development
-import { createCommunityPost } from '../services/mockFirestore';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import Ionicons from '../components/LazyIonicons';
+import { createCommunityPost } from '../services/firestore';
 
-/**
- * Create Post Screen
- * Allows users to create new posts in a community
- */
-const CreatePostScreen = ({ navigation, route, user }) => {
-  const { communityId, communityName } = route.params;
+const CreatePostScreen = ({ navigation, route, user, userProfile }) => {
+  const { communityId, communityName } = route.params || {};
   const [content, setContent] = useState('');
+  const [images, setImages] = useState([]);
+  const [location, setLocation] = useState('Chicago, IL');
+  const [showLocation, setShowLocation] = useState(true);
   const [loading, setLoading] = useState(false);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setImages(prev => [...prev, result.assets[0].uri]);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Camera permission is required to take photos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setImages(prev => [...prev, result.assets[0].uri]);
+    }
+  };
+
+  const removeImage = (index) => {
+    setImages(prev => prev.filter((_, i) => i !== index));
+  };
 
   const validateContent = () => {
     const trimmedContent = content.trim();
     
-    if (!trimmedContent) {
-      Alert.alert('Validation Error', 'Please enter some content for your post.');
+    if (!trimmedContent && images.length === 0) {
+      Alert.alert('Validation Error', 'Please enter some content or add an image.');
       return false;
     }
     
-    if (trimmedContent.length < 10) {
+    if (trimmedContent.length > 0 && trimmedContent.length < 10) {
       Alert.alert('Validation Error', 'Post content must be at least 10 characters long.');
-      return false;
-    }
-    
-    if (trimmedContent.length > 5000) {
-      Alert.alert('Validation Error', 'Post content must be less than 5000 characters.');
       return false;
     }
     
@@ -58,14 +89,7 @@ const CreatePostScreen = ({ navigation, route, user }) => {
       Alert.alert(
         'Success!',
         'Your post has been created successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              navigation.goBack();
-            }
-          }
-        ]
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
       console.error('Error creating post:', error);
@@ -75,229 +99,346 @@ const CreatePostScreen = ({ navigation, route, user }) => {
     }
   };
 
-  const canSubmit = content.trim().length >= 10 && !loading;
+  const canSubmit = (content.trim().length >= 10 || images.length > 0) && !loading;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        {/* Header */}
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Header Navigation */}
+      <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
         <View style={styles.header}>
           <TouchableOpacity
-            style={styles.headerButton}
+            style={styles.closeButton}
             onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
           >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Ionicons name="close" size={24} color="#131316" />
           </TouchableOpacity>
           
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>New Post</Text>
-            <Text style={styles.headerSubtitle}>{communityName}</Text>
-          </View>
+          <Text style={styles.headerTitle}>Create Post</Text>
           
           <TouchableOpacity
-            style={[
-              styles.headerButton,
-              styles.postButton,
-              canSubmit && styles.postButtonEnabled
-            ]}
+            style={[styles.postButton, canSubmit && styles.postButtonEnabled]}
             onPress={handleSubmit}
             disabled={!canSubmit}
-            activeOpacity={0.7}
           >
             {loading ? (
-              <ActivityIndicator size="small" color={colors.white} />
+              <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={[
-                styles.postButtonText,
-                canSubmit && styles.postButtonTextEnabled
-              ]}>
+              <Text style={[styles.postButtonText, !canSubmit && styles.postButtonTextDisabled]}>
                 Post
               </Text>
             )}
           </TouchableOpacity>
         </View>
+      </SafeAreaView>
 
-        {/* Content Input */}
-        <View style={styles.contentContainer}>
-          <View style={styles.inputContainer}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {/* Main Content Area */}
+        <ScrollView 
+          style={styles.mainContent}
+          contentContainerStyle={styles.mainContentContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* User Context */}
+          <View style={styles.userContext}>
+            <Image
+              source={{ uri: user?.photoURL || userProfile?.photoURL || 'https://randomuser.me/api/portraits/women/44.jpg' }}
+              style={styles.userAvatar}
+            />
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>
+                {userProfile?.displayName || user?.displayName || 'City Food Bank'}
+              </Text>
+              <TouchableOpacity style={styles.postingToButton}>
+                <Text style={styles.postingToText}>Posting to {communityName || 'Volunteers'}</Text>
+                <Ionicons name="chevron-down" size={14} color="#6b6c80" />
+              </TouchableOpacity>
+            </View>
+        </View>
+
+          {/* Text Input */}
+          <View style={styles.textInputContainer}>
             <TextInput
-              style={styles.contentInput}
-              placeholder="What's happening in your community?"
-              placeholderTextColor={colors.gray[500]}
-              value={content}
-              onChangeText={setContent}
+              style={styles.textInput}
+              placeholder="Share an opportunity or update... We are looking for volunteers to help sort canned goods this Saturday!"
+              placeholderTextColor="#bfc0ca"
               multiline
               autoFocus
+              value={content}
+              onChangeText={setContent}
               maxLength={5000}
-              textAlignVertical="top"
             />
           </View>
           
-          {/* Character Count */}
-          <View style={styles.footerContainer}>
-            <Text style={[
-              styles.characterCount,
-              content.length > 4500 && styles.characterCountWarning,
-              content.length >= 5000 && styles.characterCountError
-            ]}>
-              {content.length}/5000
-            </Text>
+          {/* Media Attachments */}
+          {(images.length > 0 || true) && (
+            <View style={styles.mediaSection}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.mediaScroll}
+              >
+                {images.map((uri, index) => (
+                  <View key={index} style={styles.imageContainer}>
+                    <Image source={{ uri }} style={styles.attachedImage} />
+                    <TouchableOpacity 
+                      style={styles.removeImageButton}
+                      onPress={() => removeImage(index)}
+                    >
+                      <Ionicons name="close" size={14} color="#fff" />
+                    </TouchableOpacity>
           </View>
+                ))}
+                
+                {/* Add Image Button */}
+                <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
+                  <Ionicons name="camera" size={24} color="#6b6c80" />
+                </TouchableOpacity>
+              </ScrollView>
+        </View>
+          )}
+        </ScrollView>
+
+        {/* Toolbar */}
+        <SafeAreaView edges={['bottom']} style={styles.toolbarSafeArea}>
+          <View style={styles.toolbar}>
+            <View style={styles.toolbarButtons}>
+              <TouchableOpacity style={styles.toolbarButton} onPress={takePhoto}>
+                <Ionicons name="camera" size={24} color="#1c1f4a" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.toolbarButton} onPress={pickImage}>
+                <Ionicons name="image" size={24} color="#1c1f4a" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.toolbarButton}>
+                <Ionicons name="location" size={24} color="#1c1f4a" />
+              </TouchableOpacity>
+              
+              <View style={styles.toolbarDivider} />
+              
+              <TouchableOpacity style={styles.toolbarButton}>
+                <Ionicons name="at" size={24} color="#6b6c80" />
+              </TouchableOpacity>
         </View>
 
-        {/* Tips */}
-        <View style={styles.tipsContainer}>
-          <Text style={styles.tipsTitle}>💡 Tips for great posts:</Text>
-          <Text style={styles.tipsText}>
-            • Share updates about your volunteer work{'\n'}
-            • Ask questions to engage the community{'\n'}
-            • Share resources and helpful links{'\n'}
-            • Be respectful and constructive{'\n'}
-            • Use clear and descriptive language
-          </Text>
-        </View>
-
-        {/* Minimum Length Indicator */}
-        {content.length > 0 && content.length < 10 && (
-          <View style={styles.minimumLengthContainer}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.warning[500]} />
-            <Text style={styles.minimumLengthText}>
-              {10 - content.length} more characters needed
-            </Text>
+            {/* Location Tag Preview */}
+            {showLocation && (
+              <View style={styles.locationTagContainer}>
+                <View style={styles.locationTag}>
+                  <Ionicons name="location" size={14} color="#1c1f4a" />
+                  <Text style={styles.locationTagText}>{location}</Text>
+                  <TouchableOpacity 
+                    style={styles.removeLocationButton}
+                    onPress={() => setShowLocation(false)}
+                  >
+                    <Ionicons name="close" size={14} color="#1c1f4a" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
-        )}
+        </SafeAreaView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f6f6f8',
   },
-  keyboardAvoidingView: {
-    flex: 1,
+  headerSafeArea: {
+    backgroundColor: '#f6f6f8',
+    zIndex: 10,
   },
   header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
-  },
-  headerButton: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: colors.text.secondary,
-  },
-  headerTitleContainer: {
-    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: colors.text.primary,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: colors.text.tertiary,
-    marginTop: 2,
+    fontWeight: '700',
+    color: '#131316',
+    letterSpacing: -0.3,
   },
   postButton: {
-    backgroundColor: colors.gray[300],
-    borderRadius: 16,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
+    backgroundColor: '#1c1f4a',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   postButtonEnabled: {
-    backgroundColor: colors.primary[500],
+    opacity: 1,
   },
   postButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.gray[500],
-  },
-  postButtonTextEnabled: {
-    color: colors.white,
-  },
-  contentContainer: {
-    flex: 1,
-    backgroundColor: colors.surface,
-  },
-  inputContainer: {
-    flex: 1,
-    padding: spacing.md,
-  },
-  contentInput: {
-    flex: 1,
-    fontSize: 18,
-    color: colors.text.primary,
-    lineHeight: 26,
-    textAlignVertical: 'top',
-  },
-  footerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
-  },
-  characterCount: {
     fontSize: 14,
-    color: colors.gray[500],
-    fontWeight: '500',
+    fontWeight: '700',
+    color: '#fff',
   },
-  characterCountWarning: {
-    color: colors.warning[600],
+  postButtonTextDisabled: {
+    opacity: 0.5,
   },
-  characterCountError: {
-    color: colors.error[600],
+  mainContent: {
+    flex: 1,
   },
-  tipsContainer: {
-    backgroundColor: colors.primary[50],
-    margin: spacing.md,
-    padding: spacing.md,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary[500],
+  mainContentContainer: {
+    paddingBottom: 20,
   },
-  tipsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primary[700],
-    marginBottom: spacing.xs,
-  },
-  tipsText: {
-    fontSize: 14,
-    color: colors.primary[600],
-    lineHeight: 20,
-  },
-  minimumLengthContainer: {
+  userContext: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.warning[50],
-    margin: spacing.md,
-    marginTop: 0,
-    padding: spacing.sm,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 12,
   },
-  minimumLengthText: {
-    fontSize: 14,
-    color: colors.warning[700],
-    marginLeft: spacing.xs,
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#131316',
+    lineHeight: 20,
+  },
+  postingToButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  postingToText: {
+    fontSize: 12,
     fontWeight: '500',
+    color: '#6b6c80',
+  },
+  textInputContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  textInput: {
+    fontSize: 18,
+    lineHeight: 28,
+    color: '#131316',
+    minHeight: 150,
+    textAlignVertical: 'top',
+  },
+  mediaSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  mediaScroll: {
+    gap: 12,
+    paddingBottom: 8,
+  },
+  imageContainer: {
+    position: 'relative',
+  },
+  attachedImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dedee3',
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#1f2937',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  addImageButton: {
+    width: 96,
+    height: 96,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#dedee3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolbarSafeArea: {
+    backgroundColor: '#f6f6f8',
+    borderTopWidth: 1,
+    borderTopColor: '#dedee3',
+  },
+  toolbar: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  toolbarButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+  },
+  toolbarButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  toolbarDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#dedee3',
+    marginHorizontal: 4,
+  },
+  locationTagContainer: {
+    marginTop: 8,
+    flexDirection: 'row',
+  },
+  locationTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(28, 31, 74, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  locationTagText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#1c1f4a',
+  },
+  removeLocationButton: {
+    marginLeft: 4,
   },
 });
 

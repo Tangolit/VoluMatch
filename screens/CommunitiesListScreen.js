@@ -1,3 +1,4 @@
+// Communities List Screen - Direct conversion from Figma Make HTML
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -8,33 +9,23 @@ import {
   Alert,
   TextInput,
   TouchableOpacity,
-  SafeAreaView
+  Image,
+  StatusBar,
+  ImageBackground,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../styles/colors';
-import { spacing } from '../styles/spacing';
-import CommunityCard from '../components/CommunityCard';
-// Using both mock and real Firestore services
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from '../components/LazyIonicons';
 import {
   fetchCommunities,
   fetchUserCommunities,
   joinCommunity,
   leaveCommunity,
-  isUserMemberOfCommunity,
   requestToJoinCommunity,
   getJoinRequestStatus,
-  rescindJoinRequest
-} from '../services/mockFirestore';
-// Import real Firestore functions  
-import { 
-  fetchFirestoreCommunities, 
-  fetchUserFirestoreCommunities 
+  rescindJoinRequest,
+  seedCommunityPosts
 } from '../services/firestore';
 
-/**
- * Communities List Screen
- * Displays all available communities with search and filtering
- */
 const CommunitiesListScreen = ({ navigation, user, userProfile }) => {
   const [communities, setCommunities] = useState([]);
   const [userCommunities, setUserCommunities] = useState([]);
@@ -42,18 +33,16 @@ const CommunitiesListScreen = ({ navigation, user, userProfile }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredCommunities, setFilteredCommunities] = useState([]);
-  const [showJoinedOnly, setShowJoinedOnly] = useState(false);
-  const [requestStatuses, setRequestStatuses] = useState({}); // Track request statuses
+  const [activeTab, setActiveTab] = useState('discover'); // 'discover' or 'joined'
+  const [requestStatuses, setRequestStatuses] = useState({});
 
   useEffect(() => {
     loadCommunities();
   }, [loadCommunities]);
 
-  // Filter communities when data or filter criteria changes
   useEffect(() => {
-    console.log('🔍 Communities or filter criteria changed, triggering filter');
     filterCommunities();
-  }, [communities, userCommunities, showJoinedOnly, searchQuery]);
+  }, [communities, userCommunities, activeTab, searchQuery]);
 
   const loadCommunities = useCallback(async () => {
     if (!user) return;
@@ -61,50 +50,23 @@ const CommunitiesListScreen = ({ navigation, user, userProfile }) => {
     try {
       setLoading(true);
       
-      // Try Firestore first, fallback to mock
-      let allCommunities, joinedCommunities;
+      // Seed posts if needed (runs once, skips if posts already exist)
+      await seedCommunityPosts(user.uid);
       
-      try {
-        console.log('🔍 Loading communities from Firestore...');
-        [allCommunities, joinedCommunities] = await Promise.all([
-          fetchFirestoreCommunities(),
-          fetchUserFirestoreCommunities(user.uid)
-        ]);
-        
-        if (allCommunities && allCommunities.length > 0) {
-          console.log(`✅ Loaded ${allCommunities.length} communities from Firestore`);
-        } else {
-          throw new Error('No communities in Firestore');
-        }
-      } catch (firestoreError) {
-        console.log('⚠️ Firestore failed, using mock data:', firestoreError.message);
-        [allCommunities, joinedCommunities] = await Promise.all([
-          fetchCommunities(),
-          fetchUserCommunities(user.uid)
-        ]);
-      }
-
-      console.log('🔍 CommunitiesListScreen loadCommunities:', {
-        allCommunitiesCount: allCommunities.length,
-        joinedCommunitiesCount: joinedCommunities.length
-      });
+      const [allCommunities, joinedCommunities] = await Promise.all([
+        fetchCommunities(),
+        fetchUserCommunities(user.uid)
+      ]);
 
       setCommunities(allCommunities);
       setUserCommunities(joinedCommunities);
-      
-      // Load request statuses for all communities
       await loadRequestStatuses(allCommunities);
-      
-      console.log('🔍 Communities loaded, triggering filter...');
-      
-      // The useEffect should automatically trigger filterCommunities when state updates
     } catch (error) {
       console.error('Error loading communities:', error);
-      Alert.alert('Error', 'Failed to load communities. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [user]); // Dependencies for useCallback
+  }, [user]);
 
   const loadRequestStatuses = async (communitiesList) => {
     if (!user) return;
@@ -128,52 +90,17 @@ const CommunitiesListScreen = ({ navigation, user, userProfile }) => {
   };
 
   const filterCommunities = () => {
-    console.log('🔍 filterCommunities called - checking state:', {
-      communitiesLength: communities.length,
-      userCommunitiesLength: userCommunities.length,
-      showJoinedOnly,
-      searchQuery
-    });
-
-    // Only filter if we have communities loaded
-    if (communities.length === 0 && userCommunities.length === 0) {
-      console.log('🔍 No communities loaded yet, skipping filter');
-      setFilteredCommunities([]);
-      return;
-    }
-
-    let filtered = showJoinedOnly ? userCommunities : communities;
-
-    // Debug logging
-    console.log('🔍 CommunitiesListScreen filterCommunities:', {
-      showJoinedOnly,
-      userCommunitiesCount: userCommunities.length,
-      allCommunitiesCount: communities.length,
-      searchQuery,
-      filteredBeforeSearch: filtered.length
-    });
-
-    // Validate that My Communities filter is working correctly
-    if (showJoinedOnly) {
-      console.log('🔍 MY COMMUNITIES FILTER ACTIVE - should only show joined communities');
-      console.log('🔍 User is member of:', userCommunities.map(c => c.name));
-    } else {
-      console.log('🔍 ALL COMMUNITIES FILTER ACTIVE - showing all communities');
-    }
+    let filtered = activeTab === 'joined' ? userCommunities : communities;
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(community =>
         community.name?.toLowerCase().includes(query) ||
-        community.description?.toLowerCase().includes(query) ||
-        community.tags?.some(tag => tag.toLowerCase().includes(query))
+        community.description?.toLowerCase().includes(query)
       );
     }
 
-    console.log('🔍 Final filtered communities:', filtered.length);
-    console.log('🔍 Setting filteredCommunities state...');
     setFilteredCommunities(filtered);
-    console.log('🔍 filteredCommunities state set complete');
   };
 
   const isUserJoined = (communityId) => {
@@ -185,76 +112,44 @@ const CommunitiesListScreen = ({ navigation, user, userProfile }) => {
 
     const isJoined = isUserJoined(community.id);
     
-    // Show confirmation dialog before leaving
     if (isJoined) {
       Alert.alert(
         'Leave Community',
-        `Are you sure you want to leave "${community.name}"?\n\nYou'll no longer see posts from this community and will need to request to join again if it's private.`,
+        `Are you sure you want to leave "${community.name}"?`,
         [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-          {
-            text: 'Leave',
-            style: 'destructive',
-            onPress: () => performLeaveCommunity(community),
-          },
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Leave', style: 'destructive', onPress: () => performLeaveCommunity(community) },
         ]
       );
       return;
     }
 
-    // Handle joining based on community type
     if (community.isPublic) {
-      // Public community - join directly
       try {
         await joinCommunity(community.id, user.uid);
         setUserCommunities(prev => [...prev, community]);
+        setCommunities(prev => prev.map(c => 
+          c.id === community.id ? { ...c, memberCount: c.memberCount + 1 } : c
+        ));
         Alert.alert('Success', `Joined ${community.name}`);
-
-        // Update the communities list with new member count
-        setCommunities(prev => prev.map(c => {
-          if (c.id === community.id) {
-            return {
-              ...c,
-              memberCount: c.memberCount + 1
-            };
-          }
-          return c;
-        }));
       } catch (error) {
-        console.error('Error joining community:', error);
-        Alert.alert('Error', 'Failed to join community. Please try again.');
+        Alert.alert('Error', 'Failed to join community.');
       }
     } else {
-      // Private community - handle request
       const currentStatus = requestStatuses[community.id];
       
       if (currentStatus === 'pending') {
         Alert.alert(
           'Rescind Application?',
-          `Are you sure you want to rescind your application for "${community.name}"? You'll need to apply again if you change your mind.`,
+          `Rescind your application for "${community.name}"?`,
           [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Rescind', 
-              style: 'destructive',
-              onPress: () => handleRescindRequest(community)
-            }
+            { text: 'Rescind', style: 'destructive', onPress: () => handleRescindRequest(community) }
           ]
         );
         return;
       }
       
-      if (currentStatus === 'rejected') {
-        Alert.alert(
-          'Request Previously Rejected',
-          'Your previous request to join this community was rejected. You can submit a new request if you\'d like.'
-        );
-      }
-      
-      // Show request dialog
       showRequestDialog(community);
     }
   };
@@ -262,60 +157,32 @@ const CommunitiesListScreen = ({ navigation, user, userProfile }) => {
   const showRequestDialog = (community) => {
     Alert.prompt(
       'Request to Join',
-      `"${community.name}" is a private community. Please provide a message with your request (optional):`,
+      `"${community.name}" is private. Add a message (optional):`,
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Send Request',
-          onPress: (message) => handleSendRequest(community, message || ''),
-        },
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Send Request', onPress: (message) => handleSendRequest(community, message || '') },
       ],
-      'plain-text',
-      '',
-      'default'
+      'plain-text'
     );
   };
 
   const handleSendRequest = async (community, message) => {
     try {
       await requestToJoinCommunity(community.id, user.uid, message);
-      
-      // Update request status
-      setRequestStatuses(prev => ({
-        ...prev,
-        [community.id]: 'pending'
-      }));
-      
-      Alert.alert(
-        'Request Sent!',
-        `Your request to join "${community.name}" has been sent to the organization. You'll be notified when they respond.`
-      );
+      setRequestStatuses(prev => ({ ...prev, [community.id]: 'pending' }));
+      Alert.alert('Request Sent!', `Your request to join "${community.name}" has been sent.`);
     } catch (error) {
-      console.error('Error sending join request:', error);
-      Alert.alert('Error', error.message || 'Failed to send request. Please try again.');
+      Alert.alert('Error', 'Failed to send request.');
     }
   };
 
   const handleRescindRequest = async (community) => {
     try {
       await rescindJoinRequest(community.id, user.uid);
-      
-      // Update the local state
-      setRequestStatuses(prev => ({
-        ...prev,
-        [community.id]: null
-      }));
-      
-      Alert.alert(
-        'Application Rescinded',
-        `Your application to join "${community.name}" has been rescinded.`
-      );
+      setRequestStatuses(prev => ({ ...prev, [community.id]: null }));
+      Alert.alert('Rescinded', 'Your application has been rescinded.');
     } catch (error) {
-      console.error('Error rescinding request:', error);
-      Alert.alert('Error', 'Failed to rescind request. Please try again.');
+      Alert.alert('Error', 'Failed to rescind request.');
     }
   };
 
@@ -323,21 +190,12 @@ const CommunitiesListScreen = ({ navigation, user, userProfile }) => {
     try {
       await leaveCommunity(community.id, user.uid);
       setUserCommunities(prev => prev.filter(c => c.id !== community.id));
+      setCommunities(prev => prev.map(c => 
+        c.id === community.id ? { ...c, memberCount: c.memberCount - 1 } : c
+      ));
       Alert.alert('Success', `Left ${community.name}`);
-
-      // Update the communities list with new member count
-      setCommunities(prev => prev.map(c => {
-        if (c.id === community.id) {
-          return {
-            ...c,
-            memberCount: c.memberCount - 1
-          };
-        }
-        return c;
-      }));
     } catch (error) {
-      console.error('Error leaving community:', error);
-      Alert.alert('Error', 'Failed to leave community. Please try again.');
+      Alert.alert('Error', 'Failed to leave community.');
     }
   };
 
@@ -348,255 +206,428 @@ const CommunitiesListScreen = ({ navigation, user, userProfile }) => {
     });
   };
 
-  const handleCreateCommunity = () => {
-    if (userProfile?.role === 'organization') {
-      navigation.navigate('CreateCommunity');
-    } else {
-      Alert.alert(
-        'Organization Required',
-        'Only organizations can create communities. Contact us if you need to create a community for your cause.'
-      );
-    }
-  };
-
-
-
   const onRefresh = async () => {
     setRefreshing(true);
     await loadCommunities();
     setRefreshing(false);
   };
 
-  const renderCommunityItem = ({ item }) => (
-    <CommunityCard
-      community={item}
-      isJoined={isUserJoined(item.id)}
-      onPress={() => handleCommunityPress(item)}
-      onJoinPress={() => handleJoinToggle(item)}
-      user={user}
-      requestStatus={requestStatuses[item.id]}
-    />
-  );
+  const formatMemberCount = (count) => {
+    if (count >= 1000) {
+      return `${Math.floor(count / 1000)}k+ Members`;
+    }
+    return `${count} Members`;
+  };
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="people-outline" size={64} color={colors.gray[400]} />
-      <Text style={styles.emptyTitle}>
-        {showJoinedOnly ? 'No Joined Communities' : 'No Communities Found'}
-      </Text>
-      <Text style={styles.emptySubtitle}>
-        {showJoinedOnly 
-          ? 'Join some communities to see them here!'
-          : searchQuery 
-            ? 'Try adjusting your search terms'
-            : 'Be the first to create a community!'
-        }
-      </Text>
-      {!showJoinedOnly && !searchQuery && (
-        <TouchableOpacity
-          style={styles.createButton}
-          onPress={handleCreateCommunity}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="add" size={20} color={colors.white} />
-          <Text style={styles.createButtonText}>Create Community</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  const renderCommunityCard = ({ item }) => {
+    const isJoined = isUserJoined(item.id);
+    // Handle isPublic as boolean or string, default to true if undefined
+    const isPublic = item.isPublic === true || item.isPublic === 'true';
+    const requestStatus = requestStatuses[item.id];
+    
+    // Debug log to see actual value
+    console.log(`Community "${item.name}": isPublic =`, item.isPublic, '(type:', typeof item.isPublic, ') -> showing as', isPublic ? 'PUBLIC' : 'PRIVATE');
+
+    return (
+      <TouchableOpacity 
+        style={styles.cardContainer}
+        onPress={() => handleCommunityPress(item)}
+        activeOpacity={0.95}
+      >
+        <View style={styles.card}>
+          {/* Image */}
+          <View style={styles.cardImageContainer}>
+            <ImageBackground
+              source={{ uri: item.imageUrl || 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=800' }}
+              style={styles.cardImage}
+              resizeMode="cover"
+            >
+              {/* Status Badge */}
+              <View style={styles.statusBadge}>
+                <Ionicons 
+                  name={isPublic ? "globe-outline" : "lock-closed"} 
+                  size={16} 
+                  color={isPublic ? "#16a34a" : "#64748b"} 
+                />
+                <Text style={styles.statusBadgeText}>
+                  {isPublic ? 'PUBLIC' : 'PRIVATE'}
+                </Text>
+              </View>
+            </ImageBackground>
+          </View>
+
+          {/* Content */}
+          <View style={styles.cardContent}>
+            <View style={styles.cardHeader}>
+              <View>
+                <Text style={styles.cardTitle}>{item.name}</Text>
+                <View style={styles.memberRow}>
+                  <Ionicons name="people" size={18} color="#64748b" />
+                  <Text style={styles.memberCount}>{formatMemberCount(item.memberCount || 0)}</Text>
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.cardDescription} numberOfLines={2}>
+              {item.description}
+            </Text>
+
+            <View style={styles.cardButtonContainer}>
+              {isJoined ? (
+                <TouchableOpacity 
+                  style={styles.leaveButton}
+                  onPress={() => handleJoinToggle(item)}
+                >
+                  <Text style={styles.leaveButtonText}>Leave</Text>
+                </TouchableOpacity>
+              ) : isPublic ? (
+                <TouchableOpacity 
+                  style={styles.joinButton}
+                  onPress={() => handleJoinToggle(item)}
+                >
+                  <Text style={styles.joinButtonText}>Join Community</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity 
+                  style={[
+                    styles.requestButton,
+                    requestStatus === 'pending' && styles.pendingButton
+                  ]}
+                  onPress={() => handleJoinToggle(item)}
+                >
+                  <Text style={[
+                    styles.requestButtonText,
+                    requestStatus === 'pending' && styles.pendingButtonText
+                  ]}>
+                    {requestStatus === 'pending' ? 'Pending...' : 'Request to Join'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Communities</Text>
-        <TouchableOpacity
-          style={styles.createHeaderButton}
-          onPress={handleCreateCommunity}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="add" size={24} color={colors.primary[500]} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Search bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <Ionicons name="search" size={20} color={colors.gray[500]} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search communities..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor={colors.gray[500]}
-          />
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Top Header */}
+      <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
+        {/* Status Bar Area */}
+        <View style={styles.statusBarArea} />
+        
+        {/* App Bar Content */}
+        <View style={styles.appBar}>
+          <Text style={styles.appBarTitle}>Communities</Text>
+          <View style={styles.appBarActions}>
+            <TouchableOpacity style={styles.notificationButton}>
+              <Ionicons name="notifications-outline" size={24} color="#64748b" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
 
-      {/* Filter buttons */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            !showJoinedOnly && styles.activeFilterButton
-          ]}
-          onPress={() => setShowJoinedOnly(false)}
-          activeOpacity={0.7}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            !showJoinedOnly && styles.activeFilterButtonText
-          ]}>
-            All Communities
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            showJoinedOnly && styles.activeFilterButton
-          ]}
-          onPress={() => setShowJoinedOnly(true)}
-          activeOpacity={0.7}
-        >
-          <Text style={[
-            styles.filterButtonText,
-            showJoinedOnly && styles.activeFilterButtonText
-          ]}>
-            My Communities ({userCommunities.length})
-          </Text>
-        </TouchableOpacity>
-      </View>
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <View style={styles.searchIconContainer}>
+              <Ionicons name="search" size={24} color="#64748b" />
+            </View>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Find a cause..."
+              placeholderTextColor="#64748b"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            <TouchableOpacity style={styles.filterIconContainer}>
+              <Ionicons name="options-outline" size={24} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-      {/* Communities list */}
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity 
+            style={styles.tab}
+            onPress={() => setActiveTab('discover')}
+          >
+            <Text style={[
+              styles.tabText,
+              activeTab === 'discover' && styles.tabTextActive
+            ]}>
+              Discover
+            </Text>
+            {activeTab === 'discover' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.tab}
+            onPress={() => setActiveTab('joined')}
+          >
+            <Text style={[
+              styles.tabText,
+              activeTab === 'joined' && styles.tabTextActive
+            ]}>
+              Joined
+            </Text>
+            {activeTab === 'joined' && <View style={styles.tabIndicator} />}
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+
+      {/* Scrollable Content */}
       <FlatList
         data={filteredCommunities}
-        renderItem={renderCommunityItem}
+        renderItem={renderCommunityCard}
         keyExtractor={item => item.id}
-        style={styles.list}
-        contentContainerStyle={filteredCommunities.length === 0 ? styles.emptyListContainer : styles.listContainer}
+        style={styles.scrollContent}
+        contentContainerStyle={styles.scrollContentContainer}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={renderEmptyState}
-        onLayout={() => console.log('🔍 FlatList mounted with data length:', filteredCommunities.length)}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f6f6f8',
   },
-  header: {
+  headerSafeArea: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    zIndex: 20,
+  },
+  statusBarArea: {
+    height: 40,
+    backgroundColor: '#ffffff',
+  },
+  appBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 8,
   },
-  headerTitle: {
+  appBarTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.text.primary,
+    color: '#0f172a',
+    letterSpacing: -0.3,
   },
-
-  createHeaderButton: {
-    padding: spacing.xs,
+  appBarActions: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  notificationButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchContainer: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
-  searchInputContainer: {
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.gray[100],
+    height: 48,
+    backgroundColor: '#f1f5f9',
     borderRadius: 12,
-    paddingHorizontal: spacing.sm,
+    overflow: 'hidden',
   },
-  searchIcon: {
-    marginRight: spacing.xs,
+  searchIconContainer: {
+    paddingLeft: 16,
+    paddingRight: 8,
   },
   searchInput: {
     flex: 1,
+    height: '100%',
     fontSize: 16,
-    color: colors.text.primary,
-    paddingVertical: spacing.sm,
+    color: '#0f172a',
   },
-  filterContainer: {
+  filterIconContainer: {
+    paddingRight: 16,
+  },
+  tabsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    paddingHorizontal: 16,
+    gap: 32,
   },
-  filterButton: {
+  tab: {
+    position: 'relative',
+    paddingBottom: 12,
+    paddingTop: 8,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748b',
+    letterSpacing: 0.3,
+  },
+  tabTextActive: {
+    color: '#1322ec',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#1322ec',
+    borderTopLeftRadius: 999,
+    borderTopRightRadius: 999,
+  },
+  scrollContent: {
     flex: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    backgroundColor: colors.gray[100],
-    marginHorizontal: 4,
+  },
+  scrollContentContainer: {
+    padding: 16,
+    gap: 16,
+  },
+  cardContainer: {},
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  cardImageContainer: {
+    height: 160,
+    width: '100%',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  statusBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
-  activeFilterButton: {
-    backgroundColor: colors.primary[500],
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1e293b',
+    letterSpacing: 0.5,
   },
-  filterButtonText: {
+  cardContent: {
+    padding: 16,
+    gap: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a',
+    lineHeight: 22,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  memberCount: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  cardDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#475569',
+  },
+  cardButtonContainer: {
+    paddingTop: 8,
+  },
+  joinButton: {
+    width: '100%',
+    height: 40,
+    backgroundColor: '#1322ec',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  joinButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.gray[600],
+    color: '#ffffff',
   },
-  activeFilterButtonText: {
-    color: colors.white,
-  },
-  list: {
-    flex: 1,
-  },
-  listContainer: {
-    paddingBottom: spacing.lg,
-  },
-  emptyListContainer: {
-    flexGrow: 1,
-  },
-  emptyState: {
-    flex: 1,
+  requestButton: {
+    width: '100%',
+    height: 40,
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
   },
-  emptyTitle: {
-    fontSize: 20,
+  requestButtonText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: colors.text.primary,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
+    color: '#475569',
   },
-  emptySubtitle: {
-    fontSize: 16,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
+  pendingButton: {
+    borderColor: '#fbbf24',
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
   },
-  createButton: {
-    flexDirection: 'row',
+  pendingButtonText: {
+    color: '#d97706',
+  },
+  leaveButton: {
+    width: '100%',
+    height: 40,
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ef4444',
     alignItems: 'center',
-    backgroundColor: colors.primary[500],
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 12,
+    justifyContent: 'center',
   },
-  createButtonText: {
-    fontSize: 16,
+  leaveButtonText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: colors.white,
-    marginLeft: spacing.xs,
+    color: '#ef4444',
   },
 });
 

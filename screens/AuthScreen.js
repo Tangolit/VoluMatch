@@ -13,12 +13,14 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '../components/LazyIonicons';
 import { colors } from '../styles/colors';
 import { typography } from '../styles/typography';
 import { spacing, borderRadius, shadows } from '../styles/spacing';
 
-const { width, height } = Dimensions.get('window');
+// Safe Dimensions extraction with fallbacks
+const dimensions = Dimensions.get('window') || {};
+const { width = 375, height = 667 } = dimensions;
 
 const AuthScreen = ({ navigation, onAuthSuccess }) => {
   const [email, setEmail] = useState('');
@@ -71,7 +73,7 @@ const AuthScreen = ({ navigation, onAuthSuccess }) => {
             <View style={styles.logo}>
               <Ionicons name="heart" size={32} color={colors.white} />
             </View>
-            <Text style={styles.title}>Volunteer Connect</Text>
+            <Text style={styles.title}>VoluMatch</Text>
             <Text style={styles.subtitle}>
               {isLogin ? 'Welcome back to your community!' : 'Join thousands making a difference'}
             </Text>

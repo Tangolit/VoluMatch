@@ -2,30 +2,30 @@
 export const colors = {
   // Primary Brand Colors
   primary: {
-    50: '#f0f9ff',
-    100: '#e0f2fe', 
-    200: '#bae6fd',
-    300: '#7dd3fc',
-    400: '#38bdf8',
-    500: '#0ea5e9', // Main brand color
-    600: '#0284c7',
-    700: '#0369a1',
-    800: '#075985',
-    900: '#0c4a6e',
+    50: '#f6f7fb',
+    100: '#e5e7f5',
+    200: '#c9cbe5',
+    300: '#a6a9cf',
+    400: '#8184b4',
+    500: '#1c1f49', // Volumatch brand navy
+    600: '#11143b',
+    700: '#0f1235',
+    800: '#0b0e2a',
+    900: '#07081f',
   },
   
   // Secondary/Accent Colors
   secondary: {
-    50: '#fdf4ff',
-    100: '#fae8ff',
-    200: '#f5d0fe',
-    300: '#f0abfc',
-    400: '#e879f9',
-    500: '#d946ef', // Accent color
-    600: '#c026d3',
-    700: '#a21caf',
-    800: '#86198f',
-    900: '#701a75',
+    50: '#fff8f0',
+    100: '#fdecd9',
+    200: '#f8d5b0',
+    300: '#ecb981',
+    400: '#dfa163',
+    500: '#c58a45', // Warm gold accent
+    600: '#a96f34',
+    700: '#885427',
+    800: '#6a3e20',
+    900: '#4f2c18',
   },
   
   // Success Colors (for volunteer actions)
@@ -100,16 +100,16 @@ export const colors = {
   
   // Neutral Colors
   gray: {
-    50: '#f8fafc',
-    100: '#f1f5f9',
-    200: '#e2e8f0',
-    300: '#cbd5e1',
-    400: '#94a3b8',
-    500: '#64748b',
-    600: '#475569',
-    700: '#334155',
-    800: '#1e293b',
-    900: '#0f172a',
+    50: '#f7f7fb',
+    100: '#e6e6f3',
+    200: '#cfd0e5',
+    300: '#b3b6d1',
+    400: '#8f91b4',
+    500: '#6b6d8f',
+    600: '#4f5170',
+    700: '#363754',
+    800: '#23243a',
+    900: '#121327',
   },
   
   // Special Colors
@@ -118,12 +118,12 @@ export const colors = {
   
   // Gradient Colors
   gradients: {
-    primary: ['#0ea5e9', '#0284c7'],
-    secondary: ['#d946ef', '#c026d3'],
+    primary: ['#1c1f49', '#11143b'],
+    secondary: ['#c58a45', '#a96f34'],
     success: ['#22c55e', '#16a34a'],
-    sunset: ['#f59e0b', '#ef4444'],
-    ocean: ['#0ea5e9', '#22c55e'],
-    purple: ['#8b5cf6', '#d946ef'],
+    sunset: ['#f59e0b', '#c58a45'],
+    ocean: ['#1c1f49', '#22c55e'],
+    purple: ['#7c6ad9', '#c58a45'],
   }
 };
 

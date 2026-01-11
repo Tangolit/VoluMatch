@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from './LazyIonicons';
 import { colors } from '../styles/colors';
 import { spacing } from '../styles/spacing';
 // Temporarily using mock service for development
@@ -29,7 +29,7 @@ const CommunityPostCard = ({
     createdAt,
     reactions = { like: 0 },
     commentCount = 0
-  } = post;
+  } = post || {};
 
   const loadUserProfile = useCallback(async () => {
     try {
@@ -118,7 +118,7 @@ const CommunityPostCard = ({
       {(() => {
         try {
           // Check if this is an opportunity post
-          const parsedContent = JSON.parse(content);
+          const parsedContent = content ? JSON.parse(content) : null;
           if (parsedContent.type === 'opportunity') {
             // Render opportunity card
             return (

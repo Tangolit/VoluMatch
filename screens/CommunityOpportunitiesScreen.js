@@ -11,19 +11,21 @@ import {
   SafeAreaView
 } from 'react-native';
 import Swiper from 'react-native-deck-swiper';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '../components/LazyIonicons';
 import OpportunityCardSimple from '../components/OpportunityCardSimple';
+// Using real Firestore service
 import { 
-  fetchCommunityOpportunities, 
   saveUserInterest,
+  fetchCommunityOpportunities, 
   shareOpportunityToCommunity 
-} from '../services/mockFirestore';
+} from '../services/firestore';
 import { saveSwipeLocally } from '../services/localSwipeStorage';
 
-const { width, height } = Dimensions.get('window');
-
 const CommunityOpportunitiesScreen = ({ navigation, route, user, userProfile }) => {
-  const { community } = route.params;
+  // Get dimensions dynamically to avoid module-level execution
+  const dimensions = Dimensions.get('window') || {};
+  const { width = 375, height = 667 } = dimensions;
+  const { community } = route.params || {};
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cardIndex, setCardIndex] = useState(0);
@@ -193,6 +195,8 @@ const CommunityOpportunitiesScreen = ({ navigation, route, user, userProfile }) 
           animateOverlayLabelsOpacity
           animateCardOpacity
           swipeBackCard
+          verticalSwipe={false}
+          horizontalSwipe={true}
           overlayLabels={{
             left: {
               title: 'PASS',

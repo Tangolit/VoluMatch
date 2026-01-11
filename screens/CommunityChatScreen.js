@@ -1,14 +1,14 @@
 // Community chat screen with real-time messaging
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '../components/LazyIonicons';
 import CommunityChat from '../components/CommunityChat';
 import ChatPerformanceMonitor from '../components/ChatPerformanceMonitor';
 import { colors } from '../styles/colors';
 import { spacing } from '../styles/spacing';
 
 const CommunityChatScreen = ({ route, user, userProfile }) => {
-  const { communityId, communityName } = route.params;
+  const { communityId, communityName } = route.params || {};
   const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(false);
 
   return (
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[500],
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.black,
+    shadowColor: '#000000', // colors.black
     shadowOffset: {
       width: 0,
       height: 2,

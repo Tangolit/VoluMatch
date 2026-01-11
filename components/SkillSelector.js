@@ -9,7 +9,7 @@ import {
   ScrollView,
   FlatList,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from './LazyIonicons';
 
 const SkillSelector = ({ 
   skills = [], 
@@ -26,12 +26,13 @@ const SkillSelector = ({
   const [showAllSkills, setShowAllSkills] = useState(false);
 
   // Safety check: ensure we have valid arrays - memoized to prevent recreation
-  const safeSkills = useMemo(() => 
-    Array.isArray(skills) ? skills.filter(skill => skill && typeof skill === 'string') : []
-  , [skills]);
-  const safeSelectedSkills = useMemo(() => 
-    Array.isArray(selectedSkills) ? selectedSkills : []
-  , [selectedSkills]);
+  const safeSkills = useMemo(() => {
+    return Array.isArray(skills) ? skills.filter(skill => skill && typeof skill === 'string') : [];
+  }, [skills]);
+
+  const safeSelectedSkills = useMemo(() => {
+    return Array.isArray(selectedSkills) ? selectedSkills : [];
+  }, [selectedSkills]);
 
   useEffect(() => {
     if (searchQuery.trim()) {

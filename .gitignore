@@ -32,6 +32,23 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
 
 # typescript
 *.tsbuildinfo
+
+# deployment
+google-play-service-account.json
+service-account.json
+*-service-account.json
+*.keystore
+*.jks
+
+# iOS certificates
+*.p12
+*.p8
+*.mobileprovision
+*.cer
+
+# EAS
+eas-build-*/
